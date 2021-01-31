@@ -1,3 +1,4 @@
+//Parse have the value for the current scope, and index for the string
 public class Parse {
 
     // the value of the parse
