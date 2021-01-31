@@ -20,8 +20,8 @@ public class Parser {
         }
         if (term.equals("integer")){
             return this.parse_integer(str, index);
-        } else if (term.equals("addition")){
-            return this.parse_addition_expression(str, index);
+        } else if (term.equals("add_sub_expression")){
+            return this.parse_add_sub_expression(str, index);
         } else if (term.equals("operand")){
             return this.parse_operand(str, index);
         } else if (term.equals("parenthesis")){
@@ -57,7 +57,7 @@ public class Parser {
         }
         Parse parse = this.parse(str, index+1, "opt_space");
         int index_before_expression = parse.getIndex();
-        parse = this.parse(str, parse.getIndex(), "addition");
+        parse = this.parse(str, parse.getIndex(), "add_sub_expression");
         if (parse.equals(Parser.FAIL)){
             return Parser.FAIL;
         }
@@ -72,10 +72,11 @@ public class Parser {
         }
         return new Parse(addition_value, parse.getIndex() + 1);
     }
-    //operand, 0 or more ( opt_space + opt_space operand)
-    private Parse parse_addition_expression(String str, int index){
+
+    //mul_div_expression, 0 or more ( opt_space add_sub_operator opt_space mul_div_expression)
+    private Parse parse_add_sub_expression(String str, int index){
         //always start with an integer
-        Parse parse = this.parse(str, index, "operand"); //parse out the first integer
+        Parse parse = this.parse(str, index, "mul_div_expression"); //parse out the first integer
         if (parse.equals(Parser.FAIL)){ // if not start a with integer, fail
             return Parser.FAIL;
         }
@@ -83,11 +84,25 @@ public class Parser {
         index = parse.getIndex();
 
         List<Parse> parses = zero_or_more(str, index, new ArrayList<>(
-                Arrays.asList("opt_space", "add_sub_operator", "opt_space", "operand")
+                Arrays.asList("opt_space", "add_sub_operator", "opt_space", "mul_div_expression")
         ));
-        for (Parse p: parses){
-            result = result + p.getValue();
-            index = p.getIndex();
+
+        String operation = "";
+        for (int i = 0; i < parses.size(); i++){
+            index = parses.get(i).getIndex();
+            // zero_to_more always return 4*x parses
+            if (i % 4 == 1) { // get the operation of the current iteration
+                operation = String.valueOf(str.charAt(index - 1));
+            }
+            // calculate only when its a operand
+            if (i % 4 == 3) {
+                if (operation.equals("+")){
+                    result = result + parses.get(i).getValue();
+                }
+                if (operation.equals("-")){
+                    result = result - parses.get(i).getValue();
+                }
+            }
         }
         return new Parse(result, index);
     }
@@ -105,15 +120,21 @@ public class Parser {
         List<Parse> parses = zero_or_more(str, index, new ArrayList<>(
                 Arrays.asList("opt_space", "mul_div_operator", "opt_space", "operand")
         ));
+        String operation = "";
         for (int i = 0; i < parses.size(); i++){
-            if((index - 1) >= 1 && str.charAt(index - 1) == '*'){ // always an integer before index, no out of bound index
-
-            }
             index = parses.get(i).getIndex();
             // zero_to_more always return 4*x parses
+            if (i % 4 == 1) { // get the operation of the current iteration
+                operation = String.valueOf(str.charAt(index - 1));
+            }
             // calculate only when its a operand
             if (i % 4 == 3) {
-                result = result * parses.get(i).getValue();
+                if (operation.equals("*")){
+                    result = result * parses.get(i).getValue();
+                }
+                if (operation.equals("/")){
+                    result = result / parses.get(i).getValue();
+                }
             }
         }
         return new Parse(result, index);
@@ -235,47 +256,47 @@ public class Parser {
         test(parser, "b", "integer", Parser.FAIL);
         test(parser, "", "integer", Parser.FAIL);
         //additional tests
-        test(parser, "b", "addition", Parser.FAIL);
-        test(parser, "", "addition", Parser.FAIL);
-        test(parser, "3-", "addition", new Parse(3,1));
-        test(parser, "3++", "addition", new Parse(3,1));
-        test(parser, "3+4", "addition", new Parse(7,3));
-        test(parser, "2020+2021", "addition",new Parse(4041,9));
-        test(parser, "0+0", "addition",new Parse(0,3));
-        test(parser, "1+1-", "addition",new Parse(2,3));
-        test(parser, "1+1+-", "addition",new Parse(2,3));
-        test(parser, "0+0+0+0+0", "addition",new Parse(0,9));
-        test(parser, "42+0", "addition",new Parse(42,4));
-        test(parser, "0+42", "addition",new Parse(42,4));
-        test(parser, "123+234+345", "addition",new Parse(702,11));
+        test(parser, "b", "add_sub_expression", Parser.FAIL);
+        test(parser, "", "add_sub_expression", Parser.FAIL);
+        test(parser, "3-", "add_sub_expression", new Parse(3,1));
+        test(parser, "3++", "add_sub_expression", new Parse(3,1));
+        test(parser, "3+4", "add_sub_expression", new Parse(7,3));
+        test(parser, "2020+2021", "add_sub_expression",new Parse(4041,9));
+        test(parser, "0+0", "add_sub_expression",new Parse(0,3));
+        test(parser, "1+1-", "add_sub_expression",new Parse(2,3));
+        test(parser, "1+1+-", "add_sub_expression",new Parse(2,3));
+        test(parser, "0+0+0+0+0", "add_sub_expression",new Parse(0,9));
+        test(parser, "42+0", "add_sub_expression",new Parse(42,4));
+        test(parser, "0+42", "add_sub_expression",new Parse(42,4));
+        test(parser, "123+234+345", "add_sub_expression",new Parse(702,11));
         //parenthesis tests
         test(parser, "(0)", "parenthesis",new Parse(0,3));
         test(parser, "(0+0)", "parenthesis",new Parse(0,5));
         test(parser, "(1+2)", "parenthesis",new Parse(3,5));
         test(parser, "(1+2+3)", "parenthesis",new Parse(6,7));
-        test(parser, "4+(1+2+3)", "addition",new Parse(10,9));
-        test(parser, "(1+2+3)+5", "addition",new Parse(11,9));
-        test(parser, "4+(1+2+3)+5", "addition",new Parse(15,11));
-        test(parser, "3+4+(5+6)+9", "addition",new Parse(27,11));
+        test(parser, "4+(1+2+3)", "add_sub_expression",new Parse(10,9));
+        test(parser, "(1+2+3)+5", "add_sub_expression",new Parse(11,9));
+        test(parser, "4+(1+2+3)+5", "add_sub_expression",new Parse(15,11));
+        test(parser, "3+4+(5+6)+9", "add_sub_expression",new Parse(27,11));
 
         //end-to-end test
-        test(parser, "(3+4)+((2+3)+0+(1+2+3))+9", "addition", new Parse(27,25));
+        test(parser, "(3+4)+((2+3)+0+(1+2+3))+9", "add_sub_expression", new Parse(27,25));
 
         //should fail
-        test(parser, "1+1+b", "addition",new Parse(2,3));
+        test(parser, "1+1+b", "add_sub_expression",new Parse(2,3));
 
         //opt_space test
         test(parser, "", "opt_space",new Parse(0,0));
         test(parser, " ", "opt_space",new Parse(0,1));
         test(parser, "   ", "opt_space",new Parse(0,3));
 
-        test(parser, "3 + 4", "addition",new Parse(7,5));
-        test(parser, "3  +  4", "addition",new Parse(7,7));
+        test(parser, "3 + 4", "add_sub_expression",new Parse(7,5));
+        test(parser, "3  +  4", "add_sub_expression",new Parse(7,7));
         //test(parser, " 3 + 4 ", "addition",new Parse(7,7)); //not in grammar
-        test(parser, "(3 + 4)", "addition",new Parse(7,7));
-        test(parser, "( 3+4 )", "addition",new Parse(7,7));
-        test(parser, "4 +( 1+2+ 3)+ 5", "addition",new Parse(15,15));
-        test(parser, "3 +(4+ (5+ 6)+9)", "addition",new Parse(27,16));
+        test(parser, "(3 + 4)", "add_sub_expression",new Parse(7,7));
+        test(parser, "( 3+4 )", "add_sub_expression",new Parse(7,7));
+        test(parser, "4 +( 1+2+ 3)+ 5", "add_sub_expression",new Parse(15,15));
+        test(parser, "3 +(4+ (5+ 6)+9)", "add_sub_expression",new Parse(27,16));
 
         //mul_div tests
         test(parser, "b", "mul_div_expression", Parser.FAIL);
@@ -283,15 +304,23 @@ public class Parser {
         test(parser, "3*", "mul_div_expression", new Parse(3,1));
         test(parser, "3//", "mul_div_expression", new Parse(3,1));
         test(parser, "3*4", "mul_div_expression", new Parse(12,3));
-        //test(parser, "3/4", "mul_div_expression", new Parse(12,3));
+        test(parser, "3/4", "mul_div_expression", new Parse(0,3));
         test(parser, "20*25", "mul_div_expression",new Parse(500,5));
+        test(parser, "50/25", "mul_div_expression",new Parse(2,5));
         test(parser, "0*0", "mul_div_expression",new Parse(0,3));
         test(parser, "1*1/", "mul_div_expression",new Parse(1,3));
         test(parser, "1*1*/", "mul_div_expression",new Parse(1,3));
         test(parser, "1 *3 *(4* 5)", "mul_div_expression",new Parse(60,12));
         test(parser, "42*0", "mul_div_expression",new Parse(0,4));
         test(parser, "1 *(3 *(4* 5))", "mul_div_expression",new Parse(60,14));
+        test(parser, "5 *3 /(3* 1)", "mul_div_expression",new Parse(5,12));
 
+        //add_sub test
+        test(parser, "5 -3 /(3* 1)", "add_sub_expression",new Parse(4,12));
+        test(parser, "3*4/6", "add_sub_expression",new Parse(2,5));
+        test(parser, "3 + 4 - 5", "add_sub_expression",new Parse(2,9));
+        test(parser, "3 + (4 * 5)", "add_sub_expression",new Parse(23,11));
+        test(parser, "3 * 4 - 5", "add_sub_expression",new Parse(7,9));
     }
     public static void main(String[] args) {
         test();
