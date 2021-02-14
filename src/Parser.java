@@ -10,6 +10,9 @@ public class Parser {
     static Parse FAIL = new Parse("Fail", -1); // a correct one with never produce -1 index
     static StatementParse STATEMENT_FAIL = new StatementParse("FAIL", -1);
 
+    public Parse parse(String str){
+        return this.parse(str, 0, "add_sub_expression");
+    }
     // wrapper
     public Parse parse(String str, String term){
         return this.parse(str, 0, term);
@@ -41,11 +44,16 @@ public class Parser {
     }
     //either integer or parenthesis
     private StatementParse parse_operand(String str, int index){
-        StatementParse parse = (IntegerParse) this.parse(str, index, "integer");
+        StatementParse parse = (StatementParse) this.parse(str, index, "integer");
+        //System.out.println("parsing integer: " + parse);
+        //System.out.println(!parse.equals(Parser.STATEMENT_FAIL));
         if (!parse.equals(Parser.STATEMENT_FAIL)){
             return parse;
         }
+        //System.out.println("start parsing paren");
         parse = (StatementParse) this.parse(str, index,"parenthesis");
+       // System.out.println("parsing paren: " +parse);
+        //System.out.println(!parse.equals(Parser.STATEMENT_FAIL));
         if(!parse.equals(Parser.STATEMENT_FAIL)){
             return parse;
         }
@@ -69,11 +77,10 @@ public class Parser {
                 // if mul_div is not followed by )
                 return Parser.STATEMENT_FAIL;
             }
-            return result;
         } else {
             result.setIndex(result.getIndex() + 1);
-            return result;
         }
+        return result;
     }
 
     //mul_div_expression, 0 or more ( opt_space add_sub_operator opt_space mul_div_expression)
@@ -96,7 +103,10 @@ public class Parser {
                 result = (StatementParse) parses.get(i); // operator will be StatementParse
                 result.getChildren().add(left_node);
 
-                result.getChildren().add((StatementParse) parses.get(i + 2)); // add the operand as the right node
+                StatementParse right_node = (StatementParse) parses.get(i + 2);
+                index = right_node.getIndex();
+                result.getChildren().add(right_node); // add the operand as the right node
+                result.setIndex(index); // set the index of the right node as the index for the parent node
                 left_node = result;
             }
         }
@@ -122,14 +132,16 @@ public class Parser {
                 result = (StatementParse) parses.get(i); // operator will be StatementParse
                 result.getChildren().add(left_node);
 
-                result.getChildren().add((StatementParse) parses.get(i + 2)); // add the operand as the right node
+                StatementParse right_node = (StatementParse) parses.get(i + 2);
+                index = right_node.getIndex();
+                result.getChildren().add(right_node); // add the operand as the right node
+                result.setIndex(index); // set the index of the right node as the index for the parent node
                 left_node = result;
             }
         }
         return result;
     }
 
-    // doesn't distinguish between operators - trying to fit in zero_or_more structure ------ TODO FIX THIS
     private StatementParse parse_add_sub_operator(String str, int index){
         if(index >= str.length()){ //empty string or index out of range
             return STATEMENT_FAIL;
@@ -198,7 +210,7 @@ public class Parser {
             for (String term: terms){
                 parse = this.parse(str, current_index, term);
                 // System.out.println(parse.toString());
-                if(parse.equals(Parser.FAIL)){ // ignore current iteration
+                if(parse.equals(Parser.FAIL) || parse.equals(Parser.STATEMENT_FAIL)){ // ignore current iteration
                     break iteration;
                 }
                 current_index = parse.getIndex();
