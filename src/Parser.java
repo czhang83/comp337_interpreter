@@ -24,6 +24,8 @@ public class Parser {
         }
         if (term.equals("integer")){
             return this.parse_integer(str, index);
+        } else if (term.equals("expression")){
+            return this.parse_add_sub_expression(str, index);
         } else if (term.equals("add_sub_expression")){
             return this.parse_add_sub_expression(str, index);
         } else if (term.equals("operand")){
@@ -32,12 +34,18 @@ public class Parser {
             return this.parse_parenthesis(str, index);
         } else if (term.equals("opt_space")){ //opt_space can take empty string (index = str.length())
             return this.parse_opt_space(str, index);
+        } else if (term.equals("req_space")){
+            return this.parse_req_space(str, index);
         } else if (term.equals("add_sub_operator")){
             return this.parse_add_sub_operator(str, index);
         } else if (term.equals("mul_div_operator")){
             return this.parse_mul_div_operator(str, index);
         } else if (term.equals("mul_div_expression")){
             return this.parse_mul_div_expression(str, index);
+        } else if (term.equals("space")){
+            return this.parse_space(str, index);
+        } else if (term.equals("comment")){
+            return this.parse_comment(str, index);
         } else {
             throw new AssertionError("Unexpected term " + term);
         }
@@ -66,17 +74,13 @@ public class Parser {
         }
         Parse spaces = this.parse(str, index+1, "opt_space");
         int index_before_expression = spaces.getIndex();
-        StatementParse result = (StatementParse) this.parse(str, spaces.getIndex(), "add_sub_expression");
+        StatementParse result = (StatementParse) this.parse(str, spaces.getIndex(), "expression");
         if (result.equals(Parser.STATEMENT_FAIL)){
             return Parser.STATEMENT_FAIL;
         }
         spaces = this.parse(str, result.getIndex(), "opt_space");
         if (str.charAt(spaces.getIndex()) != ')'){ // if expression does not match add
-            result = (StatementParse) this.parse(str, index_before_expression, "mul_div_expression");
-            if (result.equals(Parser.STATEMENT_FAIL) || str.charAt(result.getIndex()) != ')'){
-                // if mul_div is not followed by )
-                return Parser.STATEMENT_FAIL;
-            }
+            return Parser.STATEMENT_FAIL;
         } else {
             result.setIndex(result.getIndex() + 1);
         }
@@ -184,16 +188,74 @@ public class Parser {
         if(index >= str.length()){ //empty string or index out of range
             return new Parse("opt_space", index);
         }
-        if (str.charAt(index) != ' '){
-            return new Parse("opt_space", index);
+        while (index < str.length()){
+            Parse parse = this.parse(str, index, "space");
+            if (parse.equals(Parser.FAIL)){
+                break;
+            }
+            index = parse.getIndex();
+        }
+        return new Parse("opt_space", index);
+    }
+
+    // 1 or more space
+    // space ignored in parse tree, for keeping track of the index only
+    private Parse parse_req_space(String str, int index){
+        if(index >= str.length()){ //empty string or index out of range
+            return Parser.FAIL;
+        }
+        Parse parse = this.parse(str, index, "space");
+        if (parse.equals(Parser.FAIL)){
+            return Parser.FAIL;
+        }
+        index = parse.getIndex();
+        while (index < str.length()){
+            parse = this.parse(str, index, "space");
+            if (parse.equals(Parser.FAIL)){
+                break;
+            }
+            index = parse.getIndex();
+        }
+        return new Parse("req_space", index);
+    }
+
+    // comment | BLANK | NEWLINE
+    // ignored in parse tree, for keeping track of the index only
+    private Parse parse_space(String str, int index){
+        if(index >= str.length()){ //empty string or index out of range
+            return Parser.FAIL;
+        }
+        Parse parse = this.parse(str, index, "comment");
+        if (!parse.equals(Parser.FAIL)){
+            return parse;
+        }
+        if (str.charAt(index) == ' '){
+            return new Parse("blank", index + 1);
+        }
+        if (str.charAt(index) == '\n'){
+            return new Parse("newline", index + 1);
+        }
+        return Parser.FAIL;
+    }
+
+    // "#" ( PRINT )* NEWLINE
+    // ignored in parse tree, for keeping track of the index only
+    private Parse parse_comment(String str, int index){
+        if(index >= str.length()){ //empty string or index out of range
+            return Parser.FAIL;
+        }
+        if (str.charAt(index) != '#'){
+            return Parser.FAIL;
         }
         while (index < str.length()){
-            if (str.charAt(index) != ' ') {
-                break;
+            if (str.charAt(index) == '\n') {
+                index++;
+                return new Parse("comment", index);
             }
             index++;
         }
-        return new Parse("opt_space", index);
+        // no newline exist
+        return Parser.FAIL;
     }
 
     // not using for the grammar contains it self, for example opt_space
