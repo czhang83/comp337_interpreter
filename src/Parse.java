@@ -1,30 +1,30 @@
 //Parse have the value for the current scope, and index for the string
 public class Parse {
 
-    // the value of the parse
-    private int value;
-    // the number of characters into the string we've parsed
+    // statement parse - name, index, create new list of children
+
+    private String name;
     private int index;
 
-    public Parse(int value, int index) {
-        this.value = value;
+    public Parse(String name, int index) {
+        this.name = name;
         this.index = index;
     }
 
     public boolean equals(Parse other) {
-        return (this.value == other.value) && (this.index == other.index);
+        return (this.name.equals(other.name)) && (this.index == other.index);
     }
 
-    public String toString() {
-        return "Parse(" + this.value + ", " + this.index + ")";
-    }
-
-    public int getValue() {
-        return this.value;
+    public String getName() {
+        return this.name;
     }
 
     public int getIndex() {
         return this.index;
+    }
+
+    public void setIndex(int index){
+        this.index = index;
     }
 
 }
