@@ -1,3 +1,5 @@
+import javax.swing.plaf.nimbus.State;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List; // new ArrayList<>(Arrays.asList(meat, salad, dessert)
@@ -11,7 +13,7 @@ public class Parser {
     static StatementParse STATEMENT_FAIL = new StatementParse("FAIL", -1);
 
     public Parse parse(String str){
-        return this.parse(str, 0, "add_sub_expression");
+        return this.parse(str, 0, "program");
     }
     // wrapper
     public Parse parse(String str, String term){
@@ -22,10 +24,18 @@ public class Parser {
         if(index > str.length()){ // allow empty string/check space at end - check empty string in parse functions
             return Parser.FAIL;
         }
+        if (term.equals("program")){
+            return this.parse_program(str, index);
+        } else if (term.equals("statement")){
+            return this.parse_statement(str, index);
+        } else if (term.equals("print_statement")){
+            return this.parse_print_statement(str, index);
+        }
+
         if (term.equals("integer")){
             return this.parse_integer(str, index);
         } else if (term.equals("expression")){
-            return this.parse_add_sub_expression(str, index);
+            return this.parse_expression(str, index);
         } else if (term.equals("add_sub_expression")){
             return this.parse_add_sub_expression(str, index);
         } else if (term.equals("operand")){
@@ -50,6 +60,87 @@ public class Parser {
             throw new AssertionError("Unexpected term " + term);
         }
     }
+
+    //opt_space ( statement opt_space )*;
+    // TODO test
+    private StatementParse parse_program(String str, int index){
+        Parse parse = this.parse(str, index, "opt_space");
+        index = parse.getIndex();
+
+        List<Parse> parses = zero_or_more(str, index, new ArrayList<>(
+                Arrays.asList("statement", "opt_space")
+        ));
+
+        StatementParse program = new StatementParse("sequence", index);
+        for (int i = 0; i < parses.size(); i++){
+            // zero_to_more always return 4*x parses
+            if (i % 2 == 0) { // get the operation of the current iteration
+                StatementParse result = (StatementParse) parses.get(i); // operator will be StatementParse
+                program.getChildren().add(result);
+            }
+        }
+
+        // if str not empty after opt_space, but not recognizing statement - syntax error
+        if (str.length() != index && parses.size() == 0){
+            return Parser.STATEMENT_FAIL;
+        }
+
+        return program;
+    }
+    // print_state or expression
+    // TODO test
+    private StatementParse parse_statement(String str, int index){
+        StatementParse parse = (StatementParse) this.parse(str, index, "print_statement");
+        if (parse.equals(Parser.STATEMENT_FAIL)){
+            parse = (StatementParse) this.parse(str, index, "expression");
+            if (parse.equals(Parser.STATEMENT_FAIL)){
+                return Parser.STATEMENT_FAIL;
+            }
+            StatementParse result = new StatementParse("statement", parse.getIndex());
+            result.getChildren().add(parse);
+            return result;
+        }
+        StatementParse result = new StatementParse("statement", parse.getIndex());
+        result.getChildren().add(parse);
+        return result;
+    }
+    // "print" req_space expression opt_space ";";
+    // TODO test
+    private StatementParse parse_print_statement(String str, int index){
+        if (str.startsWith("print", index)){
+            index = index + 5;
+            Parse parse = this.parse(str, index, "req_space");
+            if (parse.equals(Parser.FAIL)){
+                return Parser.STATEMENT_FAIL;
+            }
+            index = parse.getIndex();
+            StatementParse expression = (StatementParse) this.parse(str, index, "expression");
+            if (expression.equals(Parser.STATEMENT_FAIL)){
+                return Parser.STATEMENT_FAIL;
+            }
+            index = expression.getIndex();
+            parse = this.parse(str, index, "opt_space");
+            index = parse.getIndex();
+            if (str.charAt(index) == ';'){
+                StatementParse result = new StatementParse("print", index + 1);
+                result.getChildren().add(expression);
+                return result;
+            }
+        }
+        return Parser.STATEMENT_FAIL;
+    }
+
+    // /** looping
+    private StatementParse parse_expression(String str, int index){
+        StatementParse result = this.parse_add_sub_expression(str, index);
+        if (result.equals(Parser.STATEMENT_FAIL)){
+            return Parser.STATEMENT_FAIL;
+        }
+        StatementParse expression = new StatementParse("expression", result.getIndex());
+        expression.getChildren().add(result);
+        return expression;
+    }
+     // */
     //either integer or parenthesis
     private StatementParse parse_operand(String str, int index){
         StatementParse parse = (StatementParse) this.parse(str, index, "integer");
@@ -82,7 +173,7 @@ public class Parser {
         if (str.charAt(spaces.getIndex()) != ')'){ // if expression does not match add
             return Parser.STATEMENT_FAIL;
         } else {
-            result.setIndex(result.getIndex() + 1);
+            result.setIndex(spaces.getIndex() + 1);
         }
         return result;
     }
@@ -100,7 +191,6 @@ public class Parser {
         List<Parse> parses = zero_or_more(str, index, new ArrayList<>(
                 Arrays.asList("opt_space", "add_sub_operator", "opt_space", "mul_div_expression")
         ));
-
         for (int i = 0; i < parses.size(); i++){
             // zero_to_more always return 4*x parses
             if (i % 4 == 1) { // get the operation of the current iteration
@@ -114,6 +204,9 @@ public class Parser {
                 left_node = result;
             }
         }
+        //StatementParse expression = new StatementParse("expression", index);
+        //expression.getChildren().add(result);
+        //return expression;
         return result;
     }
 
@@ -266,12 +359,14 @@ public class Parser {
         Parse parse;
         int current_index = index; // partial index, increment when one term read in successfully
 
+        //System.out.println("---------------------------------------------------------------------------");
         iteration:
         while (index < str.length()){
             ArrayList<Parse> current_parses = new ArrayList<>();
             for (String term: terms){
                 parse = this.parse(str, current_index, term);
-                // System.out.println(parse.toString());
+                //System.out.println(str.substring(0, current_index));
+                //System.out.println(parse.getName());
                 if(parse.equals(Parser.FAIL) || parse.equals(Parser.STATEMENT_FAIL)){ // ignore current iteration
                     break iteration;
                 }
@@ -279,7 +374,7 @@ public class Parser {
                 current_parses.add(parse);
             }
             for (Parse p : current_parses){
-                // System.out.println("iteration" + p.toString());
+                //System.out.println("iteration " + p.getName());
             }
             parses.addAll(current_parses);
         }

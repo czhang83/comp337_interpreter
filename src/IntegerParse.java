@@ -2,6 +2,7 @@ import java.util.List;
 
 public class IntegerParse extends StatementParse { // no children
 
+    // Values class -> Integer class, Closure class
     private int value;
     public IntegerParse(int value, int index){
         super("integer", index);

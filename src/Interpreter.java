@@ -2,16 +2,61 @@ public class Interpreter {
     String output = "";
 
     // not include syntax error - deal during parsing
-    public void execute (Parse node){
+    public String execute (Parse node){
+        String result = "";
         try {
-            exec(node);
+            result = exec(node);
+        } catch (ArithmeticException e){
+            result = "runtime error: divide by zero";
         } catch (RuntimeException e){
-            //print the error
+            e.printStackTrace();
         }
+        return result;
     }
-    public void exec(Parse node){
-        eval((StatementParse) node);
+    public String exec(Parse node){
+        StatementParse statementNode = (StatementParse) node;
+        if (node.getName().equals("FAIL")){
+            return "syntax error";
+        }
+        if (node.getName().equals("sequence")){
+            return exec_sequence(statementNode);
+        }
+        if (node.getName().equals("statement")){
+            return exec_statement(statementNode);
+        }
+        if (node.getName().equals("print")){
+            return exec_print(statementNode);
+        }
+        if (node.getName().equals("expression")){
+            exec_expression(statementNode);
+        }
+        return "";
     }
+
+    private String exec_sequence(StatementParse node){
+        String result = "";
+        for (int i = 0; i < node.getChildren().size(); i++){
+            result = result.concat(exec(node.getChildren().get(i)));
+        }
+        return result;
+    }
+
+    private String exec_statement(StatementParse node){
+        return exec(node.getChildren().get(0));
+    }
+
+    private Integer exec_expression(StatementParse node){
+        return eval(node.getChildren().get(0));
+    }
+
+    private String exec_print(StatementParse node){
+        if ((node.getChildren().get(0).getName().equals("expression"))){
+            return exec_expression(node.getChildren().get(0)).toString() + "\n";
+        }
+        return exec(node.getChildren().get(0)) + "\n";
+    }
+
+
     public Integer eval(StatementParse node){
         if (node.getName().equals("integer")){
             return ((IntegerParse) node).getValue();
@@ -23,20 +68,13 @@ public class Interpreter {
             return eval_mul(node);
         } else if (node.getName().equals("/")){
             return eval_div(node);
-        } else {
+        } else if (node.getName().equals("expression")){
+            return exec_expression(node);
+        }else {
             return 0;
         }
     }
 
-    private void exec_print(Parse node){
-        // print(eval(node.children[0];
-    }
-    //exec_sequence
-    //exec_if
-    //exec_while
-    private void exec_x(){
-
-    }
     private Integer eval_add(StatementParse node){
         int result = 0;
         for (StatementParse value: node.getChildren()){

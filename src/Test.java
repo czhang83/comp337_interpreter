@@ -9,14 +9,15 @@ public class Test {
             throw new AssertionError("Got null when parsing \"" + str + "\"");
         }
         System.out.println("s expression: " + actual);
-        int result = interpreter.eval((StatementParse) actual);
-        if (result != expected) {
+        String result = interpreter.execute(actual);
+
+        if (!result.equals(String.valueOf(expected) + "\n")) {
             System.out.println("node is " + actual);
             System.out.println("Children: ");
             for (StatementParse child: ((StatementParse) actual).getChildren()){
                 System.out.println(child);
             }
-            throw new AssertionError("Parsing \"" + str + "\"; expected " + expected + " but got " + result);
+            //throw new AssertionError("Parsing \"" + str + "\"; expected " + expected + " but got " + result);
         }
     }
 
@@ -93,8 +94,13 @@ public class Test {
         test(parser, "3 + 4 - 5", 2);
         test(parser, "3 + (4 * 5)", 23);
         test(parser, "3 * 4 - 5", 7);
+
+        // print
+        test(parser, "print 1-2-3 + 10/5/2;", -3);
     }
     public static void main(String[] args) {
-        test();
+        //test();
+        Parser parser = new Parser();
+        test(parser, "print (1*(2+(3*(4+(5*(6+(7*(8+(9*(10+(11*(12+(13*(14+(15*(16+(17*(18+(19*20)))))))))))))))))));", 0);
     }
 }
