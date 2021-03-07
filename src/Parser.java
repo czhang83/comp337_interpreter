@@ -1,13 +1,15 @@
 import javax.swing.plaf.nimbus.State;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List; // new ArrayList<>(Arrays.asList(meat, salad, dessert)
+import java.util.*;
 
 // index increment inside parse_integer
 // current index = number of character read, and the string position for next character
 // use index directly in methods, increment only when read in characters
 public class Parser {
+    static HashSet<String> keywords = new HashSet<>(){{addAll(
+            Arrays.asList("print", "var", "if", "else", "while", "func",
+                    "ret", "class", "int", "bool", "string"));
+    }};
 
     static Parse FAIL = new Parse("Fail", -1); // a correct one with never produce -1 index
     static StatementParse STATEMENT_FAIL = new StatementParse("FAIL", -1);
@@ -24,40 +26,53 @@ public class Parser {
         if(index > str.length()){ // allow empty string/check space at end - check empty string in parse functions
             return Parser.FAIL;
         }
-        if (term.equals("program")){
-            return this.parse_program(str, index);
-        } else if (term.equals("statement")){
-            return this.parse_statement(str, index);
-        } else if (term.equals("print_statement")){
-            return this.parse_print_statement(str, index);
+        switch (term) {
+            case "program":
+                return this.parse_program(str, index);
+            case "statement":
+                return this.parse_statement(str, index);
+            case "print_statement":
+                return this.parse_print_statement(str, index);
+            case "expression_statement":
+                return this.parse_expression_statement(str,index);
+            case "assignment_statement":
+                return this.parse_assignment_statement(str, index);
+            case "declaration_statement":
+                return this.parse_declaration_statement(str, index);
+
         }
 
-        if (term.equals("integer")){
-            return this.parse_integer(str, index);
-        } else if (term.equals("expression")){
-            return this.parse_expression(str, index);
-        } else if (term.equals("add_sub_expression")){
-            return this.parse_add_sub_expression(str, index);
-        } else if (term.equals("operand")){
-            return this.parse_operand(str, index);
-        } else if (term.equals("parenthesis")){
-            return this.parse_parenthesis(str, index);
-        } else if (term.equals("opt_space")){ //opt_space can take empty string (index = str.length())
-            return this.parse_opt_space(str, index);
-        } else if (term.equals("req_space")){
-            return this.parse_req_space(str, index);
-        } else if (term.equals("add_sub_operator")){
-            return this.parse_add_sub_operator(str, index);
-        } else if (term.equals("mul_div_operator")){
-            return this.parse_mul_div_operator(str, index);
-        } else if (term.equals("mul_div_expression")){
-            return this.parse_mul_div_expression(str, index);
-        } else if (term.equals("space")){
-            return this.parse_space(str, index);
-        } else if (term.equals("comment")){
-            return this.parse_comment(str, index);
-        } else {
-            throw new AssertionError("Unexpected term " + term);
+        switch (term) {
+            case "location":
+                return this.parse_location(str, index);
+            case "identifier":
+                return this.parse_identifier(str, index);
+            case "integer":
+                return this.parse_integer(str, index);
+            case "expression":
+                return this.parse_expression(str, index);
+            case "add_sub_expression":
+                return this.parse_add_sub_expression(str, index);
+            case "operand":
+                return this.parse_operand(str, index);
+            case "parenthesis":
+                return this.parse_parenthesis(str, index);
+            case "opt_space":  //opt_space can take empty string (index = str.length())
+                return this.parse_opt_space(str, index);
+            case "req_space":
+                return this.parse_req_space(str, index);
+            case "add_sub_operator":
+                return this.parse_add_sub_operator(str, index);
+            case "mul_div_operator":
+                return this.parse_mul_div_operator(str, index);
+            case "mul_div_expression":
+                return this.parse_mul_div_expression(str, index);
+            case "space":
+                return this.parse_space(str, index);
+            case "comment":
+                return this.parse_comment(str, index);
+            default:
+                throw new AssertionError("Unexpected term " + term);
         }
     }
 
@@ -90,19 +105,23 @@ public class Parser {
     // print_state or expression
     // TODO test
     private StatementParse parse_statement(String str, int index){
-        StatementParse parse = (StatementParse) this.parse(str, index, "print_statement");
-        if (parse.equals(Parser.STATEMENT_FAIL)){
-            parse = (StatementParse) this.parse(str, index, "expression");
-            if (parse.equals(Parser.STATEMENT_FAIL)){
-                return Parser.STATEMENT_FAIL;
-            }
-            StatementParse result = new StatementParse("statement", parse.getIndex());
-            result.getChildren().add(parse);
-            return result;
+        StatementParse parse = (StatementParse) this.parse(str, index, "declaration_statement");
+        if (!parse.equals(Parser.STATEMENT_FAIL)){
+            return parse;
         }
-        StatementParse result = new StatementParse("statement", parse.getIndex());
-        result.getChildren().add(parse);
-        return result;
+        parse = (StatementParse) this.parse(str, index, "assignment_statement");
+        if (!parse.equals(Parser.STATEMENT_FAIL)){
+            return parse;
+        }
+        parse = (StatementParse) this.parse(str, index, "print_statement");
+        if (!parse.equals(Parser.STATEMENT_FAIL)){
+            return parse;
+        }
+        parse = (StatementParse) this.parse(str, index, "expression_statement");
+        if (!parse.equals(Parser.STATEMENT_FAIL)){
+            return parse;
+        }
+        return STATEMENT_FAIL;
     }
     // "print" req_space expression opt_space ";";
     // TODO test
@@ -130,30 +149,134 @@ public class Parser {
         return Parser.STATEMENT_FAIL;
     }
 
-    // /** looping
+    // expression_statement = expression opt_space ";";
+    // return node name expression
+    private StatementParse parse_expression_statement(String str, int index){
+        StatementParse expression = (StatementParse) this.parse(str, index, "expression");
+        if (expression.equals(Parser.STATEMENT_FAIL)){
+            return Parser.STATEMENT_FAIL;
+        }
+        index = expression.getIndex();
+        Parse parse = this.parse(str, index, "opt_space");
+        index = parse.getIndex();
+        expression.setIndex(index);
+        return expression;
+    }
+
+    //"var" req_space assignment_statement;
+    // (assign var_name (+ expression))
+    private StatementParse parse_declaration_statement(String str, int index){
+        if (!str.startsWith("var", index)){
+            return STATEMENT_FAIL;
+        }
+        index = index + 3;
+        Parse space = this.parse(str, index, "req_space");
+        if (space.equals(STATEMENT_FAIL)){
+            return STATEMENT_FAIL;
+        }
+        StatementParse assign = (StatementParse) this.parse(str, space.getIndex(), "assignment_statement");
+        if (assign.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
+        StatementParse declare = new StatementParse("declare", assign.getIndex() + 1);
+        declare.getChildren().add(assign.getChildren().get(0).getChildren().get(0));
+        declare.getChildren().add(assign.getChildren().get(1));
+        return declare;
+    }
+    // location opt_space "=" opt_space expression opt_space ";";
+    // assign node, children: location, expression
+    private StatementParse parse_assignment_statement(String str, int index){
+        StatementParse location = (StatementParse) this.parse(str, index, "location");
+        if (location.equals(Parser.STATEMENT_FAIL)){
+            return Parser.STATEMENT_FAIL;
+        }
+        index = location.getIndex();
+        Parse spaces = this.parse(str, index, "opt_space");
+        if (str.charAt(spaces.getIndex()) != '='){
+            return Parser.STATEMENT_FAIL;
+        }
+        spaces = this.parse(str, spaces.getIndex() + 1, "opt_space");
+        StatementParse expression = (StatementParse) this.parse(str, spaces.getIndex(), "expression");
+        if (expression.equals(STATEMENT_FAIL)){
+            return STATEMENT_FAIL;
+        }
+        spaces = this.parse(str, expression.getIndex(), "opt_space");
+        if (str.charAt(spaces.getIndex()) != ';'){
+            return STATEMENT_FAIL;
+        }
+        StatementParse assign = new StatementParse("assign", spaces.getIndex() + 1);
+        assign.getChildren().add(location);
+        assign.getChildren().add(expression);
+        return assign;
+    }
+
+    /**
+     * identifier               = identifier_first_char ( identifier_char )*;
+     * identifier_first_char    = ALPHA
+     *                          | "_";
+     * identifier_char          = ALNUM
+     *                          | "_";
+     * var name can not be keywords
+     */
+    // variable default to (lookup var_name)
+    private StatementParse parse_identifier(String str, int index){
+        // if var does not start with ALPHA or _, fail
+        if (index == str.length() || (!Character.isLetter(str.charAt(index)) && str.charAt(index) != '_')){
+            return Parser.STATEMENT_FAIL;
+        }
+        int start_index = index;
+        index++;
+        while (Character.isLetter(str.charAt(index)) ||
+                str.charAt(index) == '_' || Character.isDigit(str.charAt(index))){
+            index++;
+        }
+        String var_name = str.substring(start_index, index);
+        if (keywords.contains(var_name)){
+            return Parser.STATEMENT_FAIL;
+        }
+        IdentifierParse variable = new IdentifierParse(var_name, index);
+        StatementParse lookup = new StatementParse("lookup", index);
+        lookup.getChildren().add(variable);
+        return lookup;
+    }
+
+    // identifier
+    // return location node, identifier as its child
+    private StatementParse parse_location(String str, int index){
+        StatementParse lookup = (StatementParse) this.parse(str, index, "identifier");
+        if (lookup.equals(Parser.STATEMENT_FAIL)){
+            return Parser.STATEMENT_FAIL;
+        }
+        StatementParse location = new StatementParse("varloc", lookup.getIndex());
+        location.getChildren().add(lookup.getChildren().get(0));
+        return location;
+    }
+
     private StatementParse parse_expression(String str, int index){
         StatementParse result = this.parse_add_sub_expression(str, index);
         if (result.equals(Parser.STATEMENT_FAIL)){
             return Parser.STATEMENT_FAIL;
         }
-        StatementParse expression = new StatementParse("expression", result.getIndex());
-        expression.getChildren().add(result);
-        return expression;
+        return result;
     }
-     // */
+
     //either integer or parenthesis
     private StatementParse parse_operand(String str, int index){
-        StatementParse parse = (StatementParse) this.parse(str, index, "integer");
-        //System.out.println("parsing integer: " + parse);
+        //System.out.println("start parsing paren");
+        StatementParse parse = (StatementParse) this.parse(str, index,"parenthesis");
+        // System.out.println("parsing paren: " +parse);
         //System.out.println(!parse.equals(Parser.STATEMENT_FAIL));
+        if(!parse.equals(Parser.STATEMENT_FAIL)){
+            return parse;
+        }
+
+        parse = (StatementParse) this.parse(str, index, "identifier");
         if (!parse.equals(Parser.STATEMENT_FAIL)){
             return parse;
         }
-        //System.out.println("start parsing paren");
-        parse = (StatementParse) this.parse(str, index,"parenthesis");
-       // System.out.println("parsing paren: " +parse);
+
+        parse = (StatementParse) this.parse(str, index, "integer");
+        //System.out.println("parsing integer: " + parse);
         //System.out.println(!parse.equals(Parser.STATEMENT_FAIL));
-        if(!parse.equals(Parser.STATEMENT_FAIL)){
+        if (!parse.equals(Parser.STATEMENT_FAIL)){
             return parse;
         }
         return Parser.STATEMENT_FAIL;
@@ -264,15 +387,15 @@ public class Parser {
 
 
     private StatementParse parse_integer(String str, int index){ // 1 or more integer
-        String parsed = "";
+        StringBuilder parsed = new StringBuilder();
         while (index < str.length() && Character.isDigit(str.charAt(index))){
-            parsed += str.charAt(index);
+            parsed.append(str.charAt(index));
             index++;
         }
-        if (parsed.equals("")){ //not having any integer
+        if (parsed.toString().equals("")){ //not having any integer
             return Parser.STATEMENT_FAIL;
         }
-        return new IntegerParse(Integer.parseInt(parsed), index);
+        return new IntegerParse(Integer.parseInt(parsed.toString()), index);
     }
 
     // 0 or more space
@@ -372,9 +495,6 @@ public class Parser {
                 }
                 current_index = parse.getIndex();
                 current_parses.add(parse);
-            }
-            for (Parse p : current_parses){
-                //System.out.println("iteration " + p.getName());
             }
             parses.addAll(current_parses);
         }

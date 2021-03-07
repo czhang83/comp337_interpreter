@@ -1,4 +1,3 @@
-import java.util.List;
 
 public class IntegerParse extends StatementParse { // no children
 
@@ -17,7 +16,7 @@ public class IntegerParse extends StatementParse { // no children
         return this.value;
     }
 
-    public boolean integer_equals(IntegerParse other) {
+    public boolean equals(IntegerParse other) {
         return (this.getValue() == other.getValue()) && (this.getIndex() == other.getIndex());
     }
 }
