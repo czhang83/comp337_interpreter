@@ -10,6 +10,7 @@ public class Test {
         }
         System.out.println("s expression: " + actual);
         String result = interpreter.execute(actual);
+        System.out.println("result " + result);
 
         if (!result.equals(expected + "\n")) {
             System.out.println("node is " + actual);
@@ -101,6 +102,6 @@ public class Test {
     public static void main(String[] args) {
         //test();
         Parser parser = new Parser();
-        test(parser, "var test = 2+3; test = 1; print test;", 0);
+        test(parser, "var num = 3; num = num = num; print num;", 0);
     }
 }

@@ -27,4 +27,8 @@ public class Parse {
         this.index = index;
     }
 
+    @Override
+    public String toString() {
+        return "";
+    }
 }

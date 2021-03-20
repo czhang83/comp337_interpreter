@@ -11,10 +11,18 @@ public class Parser {
                     "ret", "class", "int", "bool", "string"));
     }};
 
-    static Parse FAIL = new Parse("Fail", -1); // a correct one with never produce -1 index
+    static Parse FAIL = new Parse("FAIL", -1); // a correct one with never produce -1 index
     static StatementParse STATEMENT_FAIL = new StatementParse("FAIL", -1);
 
+    // check if successfully parsed to the end
     public Parse parse(String str){
+        Parse result = this.parse(str, 0, "program");
+        if (result.getIndex() != str.length()){
+            System.out.println("result is " + result);
+            if (result.getIndex() != -1) System.out.println(str.substring(0, result.getIndex()));
+            System.out.println("index " + result.getIndex());
+            return FAIL;
+        }
         return this.parse(str, 0, "program");
     }
     // wrapper
@@ -93,6 +101,7 @@ public class Parser {
                 StatementParse result = (StatementParse) parses.get(i); // operator will be StatementParse
                 program.getChildren().add(result);
             }
+            program.setIndex(parses.get(i).getIndex());
         }
 
         // if str not empty after opt_space, but not recognizing statement - syntax error
@@ -140,7 +149,7 @@ public class Parser {
             index = expression.getIndex();
             parse = this.parse(str, index, "opt_space");
             index = parse.getIndex();
-            if (str.charAt(index) == ';'){
+            if (charAt(str, index, ';')){
                 StatementParse result = new StatementParse("print", index + 1);
                 result.getChildren().add(expression);
                 return result;
@@ -159,7 +168,10 @@ public class Parser {
         index = expression.getIndex();
         Parse parse = this.parse(str, index, "opt_space");
         index = parse.getIndex();
-        expression.setIndex(index);
+        if (!charAt(str, index, ';')){
+            return STATEMENT_FAIL;
+        }
+        expression.setIndex(index + 1);
         return expression;
     }
 
@@ -176,7 +188,7 @@ public class Parser {
         }
         StatementParse assign = (StatementParse) this.parse(str, space.getIndex(), "assignment_statement");
         if (assign.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
-        StatementParse declare = new StatementParse("declare", assign.getIndex() + 1);
+        StatementParse declare = new StatementParse("declare", assign.getIndex());
         declare.getChildren().add(assign.getChildren().get(0).getChildren().get(0));
         declare.getChildren().add(assign.getChildren().get(1));
         return declare;
@@ -190,7 +202,7 @@ public class Parser {
         }
         index = location.getIndex();
         Parse spaces = this.parse(str, index, "opt_space");
-        if (str.charAt(spaces.getIndex()) != '='){
+        if (!charAt(str, spaces.getIndex(), '=')){
             return Parser.STATEMENT_FAIL;
         }
         spaces = this.parse(str, spaces.getIndex() + 1, "opt_space");
@@ -199,7 +211,7 @@ public class Parser {
             return STATEMENT_FAIL;
         }
         spaces = this.parse(str, expression.getIndex(), "opt_space");
-        if (str.charAt(spaces.getIndex()) != ';'){
+        if (!charAt(str, spaces.getIndex(), ';')){
             return STATEMENT_FAIL;
         }
         StatementParse assign = new StatementParse("assign", spaces.getIndex() + 1);
@@ -283,7 +295,7 @@ public class Parser {
     }
     // ( opt_space expression opt_space )
     private StatementParse parse_parenthesis(String str, int index){
-        if (index == str.length() || str.charAt(index) != '('){ // short circuit - check if empty string/index at end
+        if (!charAt(str, index, '(')){ // short circuit - check if empty string/index at end
             return Parser.STATEMENT_FAIL;
         }
         Parse spaces = this.parse(str, index+1, "opt_space");
@@ -293,7 +305,7 @@ public class Parser {
             return Parser.STATEMENT_FAIL;
         }
         spaces = this.parse(str, result.getIndex(), "opt_space");
-        if (str.charAt(spaces.getIndex()) != ')'){ // if expression does not match add
+        if (!charAt(str, spaces.getIndex(), ')')){ // if expression does not match add
             return Parser.STATEMENT_FAIL;
         } else {
             result.setIndex(spaces.getIndex() + 1);
@@ -363,23 +375,17 @@ public class Parser {
     }
 
     private StatementParse parse_add_sub_operator(String str, int index){
-        if(index >= str.length()){ //empty string or index out of range
-            return STATEMENT_FAIL;
-        }
-        if (str.charAt(index) == '+'){
+        if (charAt(str, index, '+')){
             return new StatementParse("+",index + 1);
-        } else if (str.charAt(index) == '-'){
+        } else if (charAt(str, index, '-')){
             return new StatementParse("-",index + 1);
         }
         return STATEMENT_FAIL;
     }
     private StatementParse parse_mul_div_operator(String str, int index){
-        if(index >= str.length()){ //empty string or index out of range
-            return STATEMENT_FAIL;
-        }
-        if (str.charAt(index) == '*'){
+        if (charAt(str, index, '*')){
             return new StatementParse("*",index + 1);
-        } else if (str.charAt(index) == '/'){
+        } else if (charAt(str, index, '/')){
             return new StatementParse("/",index + 1);
         }
         return STATEMENT_FAIL;
@@ -445,30 +451,33 @@ public class Parser {
         if (!parse.equals(Parser.FAIL)){
             return parse;
         }
-        if (str.charAt(index) == ' '){
+        if (charAt(str, index, ' ') || charAt(str, index, '\t') ){
             return new Parse("blank", index + 1);
         }
-        if (str.charAt(index) == '\n'){
+        if (charAt(str, index, '\n')){
             return new Parse("newline", index + 1);
         }
         return Parser.FAIL;
     }
 
     // "#" ( PRINT )* NEWLINE
+    // if at end of the string, don't need NEWLINE
     // ignored in parse tree, for keeping track of the index only
     private Parse parse_comment(String str, int index){
-        if(index >= str.length()){ //empty string or index out of range
-            return Parser.FAIL;
-        }
-        if (str.charAt(index) != '#'){
+        //empty string or index out of range
+        if (!charAt(str, index, '#')){
             return Parser.FAIL;
         }
         while (index < str.length()){
-            if (str.charAt(index) == '\n') {
+            if (charAt(str, index, '\n')) {
                 index++;
                 return new Parse("comment", index);
             }
             index++;
+        }
+        // if reached the end of the string, and no \n
+        if (index == str.length()){
+            return new Parse("comment", index);
         }
         // no newline exist
         return Parser.FAIL;
@@ -502,15 +511,13 @@ public class Parser {
         if (parses.size() == 0){
             return new ArrayList<>();
         }
-        /*
-        // debug
-        for (Parse p : parses){
-            System.out.println("iteration" + p.toString());
-        }
-        */
         return parses;
     }
 
+    // check if index out of bound, return false, to avoid exception
+    private Boolean charAt(String str, int index, char x){
+        return index < str.length() && str.charAt(index) == x; // short circuit
+    }
     private Boolean reached_end(String str, int index){
         return index == str.length();
     }
