@@ -102,6 +102,7 @@ public class Test {
     public static void main(String[] args) {
         //test();
         Parser parser = new Parser();
-        test(parser, "var num = 3; num = num = num; print num;", 0);
+        test(parser, "# testing for syntax error when trying to stack variable declarations\n" +
+                "var a = var b = 2;", 0);
     }
 }
