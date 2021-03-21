@@ -13,13 +13,13 @@ public class StatementParse extends Parse{
         return this.children;
     }
     public String toString(){
-        String result = "";
-        result += "(";
-        result += this.getName();
+        StringBuilder result = new StringBuilder();
+        result.append("(");
+        result.append(this.getName());
         for (StatementParse child : this.children){
-            result += " " + child.toString();
+            result.append(" ").append(child.toString());
         }
-        result += ")";
-        return result;
+        result.append(")");
+        return result.toString();
     }
 }

@@ -102,7 +102,78 @@ public class Test {
     public static void main(String[] args) {
         //test();
         Parser parser = new Parser();
-        test(parser, "# testing for syntax error when trying to stack variable declarations\n" +
-                "var a = var b = 2;", 0);
+        test(parser, "numerator * other(1)();",0);
+        test(parser, "ret Rational(\n" +
+                "            numerator * other(1)(),\n" +
+                "            denominator * other(2)()\n" +
+                "        );",0);
+        test(parser, "ret func(index) {\n" +
+                "        if (index == 1) {\n" +
+                "            ret get_numerator;\n" +
+                "        }\n" +
+                "        if (index == 2) {\n" +
+                "            ret get_denominator;\n" +
+                "        }\n" +
+                "        if (index == 3) {\n" +
+                "            ret set_numerator;\n" +
+                "        }\n" +
+                "        if (index == 4) {\n" +
+                "            ret set_denominator;\n" +
+                "        }\n" +
+                "        if (index == 5) {\n" +
+                "            ret multiply;\n" +
+                "        }\n" +
+                "    };",0);
+        test(parser, "var Rational = func(numerator, denominator) {\n" +
+                "\n" +
+                "    var get_numerator = func() {\n" +
+                "        ret numerator;\n" +
+                "    };\n" +
+                "\n" +
+                "    var get_denominator = func() {\n" +
+                "        ret denominator;\n" +
+                "    };\n" +
+                "\n" +
+                "    var set_numerator = func(val) {\n" +
+                "        numerator = val;\n" +
+                "    };\n" +
+                "\n" +
+                "    var set_denominator = func(val) {\n" +
+                "        denominator = val;\n" +
+                "    };\n" +
+                "\n" +
+                "    var multiply = func(other) {\n" +
+                "        ret Rational(\n" +
+                "            numerator * other(1)(),\n" +
+                "            denominator * other(2)()\n" +
+                "        );\n" +
+                "    };\n" +
+                "\n" +
+                "    ret func(index) {\n" +
+                "        if (index == 1) {\n" +
+                "            ret get_numerator;\n" +
+                "        }\n" +
+                "        if (index == 2) {\n" +
+                "            ret get_denominator;\n" +
+                "        }\n" +
+                "        if (index == 3) {\n" +
+                "            ret set_numerator;\n" +
+                "        }\n" +
+                "        if (index == 4) {\n" +
+                "            ret set_denominator;\n" +
+                "        }\n" +
+                "        if (index == 5) {\n" +
+                "            ret multiply;\n" +
+                "        }\n" +
+                "    };\n" +
+                "\n" +
+                "};\n" +
+                "\n" +
+                "var a = Rational(0, 0);\n" +
+                "a(3)(1);\n" +
+                "a(4)(2);\n" +
+                "var b = Rational(2, 1);\n" +
+                "var c = a(5)(b)(5)(b)(5)(b);\n" +
+                "print c(1)() / c(2)();\n", 0);
     }
 }

@@ -2,7 +2,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 
 public class Interpreter {
-    String output = "";
     Closure mainClosure;
     Closure currentClosure;
 
