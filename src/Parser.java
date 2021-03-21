@@ -56,6 +56,8 @@ public class Parser {
         }
 
         switch (term) {
+            case "class":
+                return this.parse_class(str, index);
             case "call_expression":
                 return this.parse_call_expression(str, index);
             case "function_call":
@@ -678,9 +680,14 @@ public class Parser {
         return result;
     }
 
-    //parenthesized_expression | function | identifier | integer
+    //class | parenthesized_expression | function | identifier | integer
     private StatementParse parse_operand(String str, int index){
-        StatementParse parse = (StatementParse) this.parse(str, index,"parenthesis");
+        StatementParse parse = (StatementParse) this.parse(str, index,"class");
+        if(!parse.equals(Parser.STATEMENT_FAIL)){
+            return parse;
+        }
+
+        parse = (StatementParse) this.parse(str, index,"parenthesis");
         if(!parse.equals(Parser.STATEMENT_FAIL)){
             return parse;
         }
@@ -701,6 +708,34 @@ public class Parser {
         }
         return Parser.STATEMENT_FAIL;
     }
+
+    // "class" opt_space "{" ( opt_space declaration_statement )* opt_space "}"
+    private StatementParse parse_class(String str, int index){
+        if (!str.startsWith("class", index)) return STATEMENT_FAIL;
+        Parse spaces = this.parse(str, index + 5, "opt_space");
+        index = spaces.getIndex();
+
+        if (!charAt(str, index, '{')) return STATEMENT_FAIL;
+        StatementParse class_parse = new StatementParse("class", index + 1);
+        List<Parse> parses = zero_or_more(str, index + 1, new ArrayList<>(
+                Arrays.asList("opt_space", "declaration_statement")
+        ));
+        for (int i = 0; i < parses.size(); i++){
+            if (i % 2 == 1) {
+                StatementParse declare = (StatementParse) parses.get(i);
+                class_parse.getChildren().add(declare);
+                class_parse.setIndex(declare.getIndex());
+            }
+        }
+
+        spaces = this.parse(str, class_parse.getIndex(), "opt_space");
+        index = spaces.getIndex();
+        if (!charAt(str, index, '}')) return STATEMENT_FAIL;
+        class_parse.setIndex(index + 1);
+
+        return class_parse;
+    }
+
     // ( opt_space expression opt_space )
     private StatementParse parse_parenthesis(String str, int index){
         if (!charAt(str, index, '(')){ // short circuit - check if empty string/index at end
