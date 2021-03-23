@@ -1,34 +1,41 @@
 import java.util.HashMap;
 
 // throw runtime exception
-public class Closure {
-    private HashMap<String, Integer> closure;
+public class Closure extends Value{
+    private HashMap<String, Value> values;
     private Closure parent;
+    // if this closure is for a function, store the function node
+    private StatementParse function;
 
     public Closure(){
-        this.closure = new HashMap<>();
+        this.values = new HashMap<>();
     }
 
     public Closure(Closure parent){
-        this.closure = new HashMap<>();
+        this.values = new HashMap<>();
         this.parent = parent;
     }
 
-    public HashMap<String, Integer> getClosure() {
-        return closure;
+    public Closure(Closure parent, StatementParse function){
+        this.values = new HashMap<>();
+        this.parent = parent;
+        this.function = function;
+    }
+
+    public HashMap<String, Value> getValues() {
+        return values;
     }
 
     public boolean contains (String variable){
-        return closure.containsKey(variable);
+        return values.containsKey(variable);
     }
 
     // declare a new variable
-    // default value to 0
     public void declare (String name){
         if (contains(name)){
             throw new VariableAlreadyDefined();
         }
-        this.closure.put(name, 0);
+        this.values.put(name, null);
     }
 
     // declare with value
@@ -36,21 +43,48 @@ public class Closure {
         if (contains(name)){
             throw new VariableAlreadyDefined();
         }
-        this.closure.put(name, value);
+        this.values.put(name, new IntegerValue(value));
     }
 
+    // declare with function
+    public void declare (String name, StatementParse function, Closure parent){
+        if (contains(name)){
+            throw new VariableAlreadyDefined();
+        }
+        Closure newClosure = new Closure(parent, function);
+        this.values.put(name, newClosure);
+    }
+
+    // assign a new int
     public void assign (String name, int value){
-        if (!contains(name)){
-            throw new UndefinedVariable();
-        }
-        this.closure.put(name, value);
+        Closure exist = find_var(name);
+        Closure newClosure = new Closure(parent, function);
+        exist.getValues().put(name, new IntegerValue(value));
     }
 
-    public int lookup (String name){
-        if (!contains(name)){
-            throw new UndefinedVariable();
+    // assign a new function
+    public void assign (String name, StatementParse function, Closure parent){
+        Closure exist = find_var(name);
+        Closure newClosure = new Closure(parent, function);
+        exist.getValues().put(name, newClosure);
+    }
+
+    // if variable not exist, check the parents, until reached the end
+    public Value lookup (String name){
+        Closure exist = find_var(name);
+        return exist.getValues().get(name);
+    }
+
+    // find the closure that contain the variable
+    public Closure find_var(String name){
+        Closure currentClosure = this;
+        while (currentClosure != null){
+            if (currentClosure.contains(name)){
+                return currentClosure;
+            }
+            currentClosure = currentClosure.getParent();
         }
-        return this.closure.get(name);
+        throw new UndefinedVariable();
     }
 
     public Closure getParent() {

@@ -2,6 +2,11 @@ import java.util.Arrays;
 import java.util.HashSet;
 
 public class Interpreter {
+    // operators for print to eval
+    HashSet<String> operators = new HashSet<>(){{addAll(
+            Arrays.asList("+", "-", "*", "/", "integer", "||", "&&",
+                    "!", "==", "!=", "<=", ">=", "<", ">"));
+    }};
     Closure mainClosure;
     Closure currentClosure;
 
@@ -26,7 +31,7 @@ public class Interpreter {
         return result;
     }
     public String exec(Parse node){
-        if (node.getName().equals("FAIL")){
+        if (node == null){
             return "syntax error";
         }
         StatementParse statementNode = (StatementParse) node;
@@ -45,9 +50,12 @@ public class Interpreter {
             case "assign":
                 exec_assign(statementNode);
                 break;
-            case "varloc":
-                //exec_varloc(statementNode);
-                break;
+            case "if":
+                return exec_if(statementNode);
+            case "ifelse":
+                return exec_ifelse(statementNode);
+            case "while":
+                return exec_while(statementNode);
             case "lookup":
                 return exec_lookup(statementNode);
         }
@@ -71,9 +79,6 @@ public class Interpreter {
     }
 
     private String exec_print(StatementParse node){
-        HashSet<String> operators = new HashSet<>(){{addAll(
-                Arrays.asList("+", "-", "*", "/", "integer"));
-        }};
         if (operators.contains(node.getChildren().get(0).getName())){
             return exec_expression(node.getChildren().get(0)) + "\n";
         }
@@ -82,7 +87,6 @@ public class Interpreter {
 
     // (declare name value)
     // value is optional
-    // default value 0
     private void exec_declare(StatementParse node){
         String variableName = node.getChildren().get(0).getName();
 
@@ -95,12 +99,64 @@ public class Interpreter {
     }
 
     private String exec_lookup(StatementParse node){
-        return String.valueOf(currentClosure.lookup(node.getChildren().get(0).getName()));
+        Value value = currentClosure.lookup(node.getChildren().get(0).getName());
+        if (value instanceof IntegerValue){
+            return String.valueOf(((IntegerValue) value).getValue());
+        }
+        return null;
     }
 
     private void exec_assign(StatementParse node){
         String name = node.getChildren().get(0).getChildren().get(0).getName();
         currentClosure.assign(name, eval(node.getChildren().get(1)));
+    }
+
+    private String exec_if(StatementParse node){
+        String print = "";
+        // if the condition is true
+        // create a child closure, set it as the currentClosure
+        if (isTrue(eval(node.getChildren().get(0)))){
+            currentClosure = new Closure(currentClosure);
+            print = exec(node.getChildren().get(1));
+
+            // change the closure back
+            currentClosure = currentClosure.getParent();
+        }
+        return print;
+    }
+
+    private String exec_ifelse(StatementParse node){
+        String print = "";
+        // if the condition is true
+        // create a child closure, set it as the currentClosure
+        if (isTrue(eval(node.getChildren().get(0)))){
+            currentClosure = new Closure(currentClosure);
+            print = exec(node.getChildren().get(1));
+
+            // change the closure back
+            currentClosure = currentClosure.getParent();
+        } else {
+            currentClosure = new Closure(currentClosure);
+            print = exec(node.getChildren().get(2));
+
+            // change the closure back
+            currentClosure = currentClosure.getParent();
+        }
+        return print;
+    }
+
+    private String exec_while(StatementParse node){
+        String print = "";
+        // if the condition is true
+        // create a child closure, set it as the currentClosure
+        while (isTrue(eval(node.getChildren().get(0)))){
+            currentClosure = new Closure(currentClosure);
+            print = print.concat(exec(node.getChildren().get(1)));
+
+            // change the closure back
+            currentClosure = currentClosure.getParent();
+        }
+        return print;
     }
 
     public Integer eval(StatementParse node){
@@ -115,6 +171,24 @@ public class Interpreter {
                 return eval_mul(node);
             case "/":
                 return eval_div(node);
+            case "==":
+                return eval_eq(node);
+            case "!=":
+                return eval_not_eq(node);
+            case "<=":
+                return eval_leq(node);
+            case ">=":
+                return eval_geq(node);
+            case "<":
+                return eval_less(node);
+            case ">":
+                return eval_greater(node);
+            case "!":
+                return eval_neg(node);
+            case "||":
+                return eval_or(node);
+            case "&&":
+                return eval_and(node);
             case "lookup":
                 return eval_lookup(node);
             default:
@@ -122,8 +196,49 @@ public class Interpreter {
         }
     }
 
+    private Integer eval_eq(StatementParse node){
+        if (eval(node.getChildren().get(0)).equals(eval(node.getChildren().get(1)))) return 1;
+        return 0;
+    }
+    private Integer eval_not_eq(StatementParse node){
+        if (!eval(node.getChildren().get(0)).equals(eval(node.getChildren().get(1)))) return 1;
+        return 0;
+    }
+    private Integer eval_leq(StatementParse node){
+        if (eval(node.getChildren().get(0)) <= eval(node.getChildren().get(1))) return 1;
+        return 0;
+    }
+    private Integer eval_geq(StatementParse node){
+        if (eval(node.getChildren().get(0)) >= eval(node.getChildren().get(1))) return 1;
+        return 0;
+    }
+    private Integer eval_less(StatementParse node){
+        if (eval(node.getChildren().get(0)) < eval(node.getChildren().get(1))) return 1;
+        return 0;
+    }
+    private Integer eval_greater(StatementParse node){
+        if (eval(node.getChildren().get(0)) > eval(node.getChildren().get(1))) return 1;
+        return 0;
+    }
+    private Integer eval_neg(StatementParse node){
+        if (isTrue(eval(node.getChildren().get(0)))) return 0;
+        return 1;
+    }
+    private Integer eval_or(StatementParse node){
+        if (isTrue(eval(node.getChildren().get(0))) || isTrue(eval(node.getChildren().get(1)))) return 1;
+        return 0;
+    }
+    private Integer eval_and(StatementParse node){
+        if (isTrue(eval(node.getChildren().get(0))) && isTrue(eval(node.getChildren().get(1)))) return 1;
+        return 0;
+    }
+
     private Integer eval_lookup(StatementParse node){
-        return currentClosure.lookup(node.getChildren().get(0).getName());
+         Value value = currentClosure.lookup(node.getChildren().get(0).getName());
+         if (value instanceof IntegerValue){
+             return ((IntegerValue) value).getValue();
+         }
+         return null;
     }
 
     private Integer eval_add(StatementParse node){
@@ -192,6 +307,11 @@ public class Interpreter {
             }
         }
         return result;
+    }
+
+    // 0 - False, other values - True
+    private Boolean isTrue(int value){
+        return value != 0;
     }
 
 

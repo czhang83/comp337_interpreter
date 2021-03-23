@@ -15,11 +15,13 @@ public class Parser {
     // check if successfully parsed to the end
     public Parse parse(String str){
         Parse result = this.parse(str, 0, "program");
-        if (result.getIndex() != str.length()){
-            System.out.println("result is " + result);
-            if (result.getIndex() != -1) System.out.println(str.substring(0, result.getIndex()));
-            System.out.println("index " + result.getIndex());
-            return FAIL;
+        if (result.getIndex() != str.length() || result.equals(FAIL) || result.equals(STATEMENT_FAIL)){
+            System.out.println("------------------Could not parse to the end---------------------------");
+            System.out.println("s-expression: " + result);
+            if (result.getIndex() != -1) System.out.println("Parsed: " + str.substring(0, result.getIndex()));
+            System.out.println("index: " + result.getIndex());
+            System.out.println("--------------------------------------------------------------");
+            return null;
         }
         return this.parse(str, 0, "program");
     }
