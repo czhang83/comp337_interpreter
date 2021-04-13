@@ -1,4 +1,5 @@
 import java.util.HashMap;
+import java.util.List;
 
 // throw runtime exception
 public class Closure extends Value{
@@ -6,6 +7,8 @@ public class Closure extends Value{
     private Closure parent;
     // if this closure is for a function, store the function node
     private StatementParse function;
+    // function return default 0
+    private Value ret = new IntegerValue(0);
 
     public Closure(){
         this.values = new HashMap<>();
@@ -50,6 +53,16 @@ public class Closure extends Value{
     public void declare (String name, StatementParse function, Closure parent){
         if (contains(name)){
             throw new VariableAlreadyDefined();
+        }
+        List<StatementParse> parameters = function.getChildren().get(0).getChildren();
+        for (StatementParse x: parameters){
+            int count = 0;
+            for (StatementParse y: parameters){
+                if (x.getName().equals(y.getName())){
+                    count++;
+                }
+            }
+            if (count > 1) throw new DuplicateParam();
         }
         Closure newClosure = new Closure(parent, function);
         this.values.put(name, newClosure);
@@ -98,5 +111,30 @@ public class Closure extends Value{
     @Override
     public String toString() {
         return "closure";
+    }
+
+    public StatementParse getFunction(){
+        return this.function;
+    }
+
+    public StatementParse getParameters(){
+        return this.function.getChildren().get(0);
+    }
+
+    public StatementParse getSequence(){
+        return this.function.getChildren().get(1);
+    }
+
+    public void setRet(Value value){
+        this.ret = value;
+    }
+
+    public Value getRet(){
+        return this.ret;
+    }
+
+    // remove all variables when this closure is closed
+    public void closeClosure(){
+        this.values = new HashMap<>();
     }
 }

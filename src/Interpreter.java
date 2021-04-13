@@ -10,68 +10,112 @@ public class Interpreter {
     Closure mainClosure;
     Closure currentClosure;
 
+    String consoleOutput = "";
+
     // not include syntax error - deal during parsing
     public String execute (Parse node){
         mainClosure = new Closure();
         currentClosure = mainClosure;
 
         System.out.println("s expression "+ node);
-        String result = "";
+        consoleOutput = "";
         try {
-            result = exec(node);
+            exec(node);
         } catch (ArithmeticException e){
-            result = "runtime error: divide by zero";
+            consoleOutput = "runtime error: divide by zero";
         } catch (VariableAlreadyDefined e){
-            result = "runtime error: variable already defined";
+            consoleOutput = "runtime error: variable already defined";
         } catch (UndefinedVariable e){
-            result = "runtime error: undefined variable";
-        } catch (RuntimeException e){
+            consoleOutput = "runtime error: undefined variable";
+        } catch (DuplicateParam e){
+            consoleOutput = "runtime error: duplicate parameter";
+        }
+
+        catch (CallingNonFunction e){
+            consoleOutput = "runtime error: calling a non-function";
+        } catch (ArgumentMismatch e){
+            consoleOutput = "runtime error: argument mismatch";
+        }
+        catch (RuntimeException e){
             e.printStackTrace();
         }
-        return result;
+        return consoleOutput;
     }
-    public String exec(Parse node){
+    public void exec(Parse node){
         if (node == null){
-            return "syntax error";
+            consoleOutput = "syntax error";
         }
         StatementParse statementNode = (StatementParse) node;
         switch (node.getName()) {
             case "sequence":
-                return exec_sequence(statementNode);
+                exec_sequence(statementNode); break;
             case "statement":
-                return exec_statement(statementNode);
+                exec_statement(statementNode); break;
             case "print":
-                return exec_print(statementNode);
+                exec_print(statementNode); break;
             case "expression":
-                return exec_expression(statementNode);
+                exec_expression(statementNode); break;
             case "declare":
-                exec_declare(statementNode);
-                break;
+                exec_declare(statementNode); break;
             case "assign":
-                exec_assign(statementNode);
-                break;
+                exec_assign(statementNode); break;
             case "if":
-                return exec_if(statementNode);
+                exec_if(statementNode); break;
             case "ifelse":
-                return exec_ifelse(statementNode);
+                exec_ifelse(statementNode); break;
             case "while":
-                return exec_while(statementNode);
+                exec_while(statementNode); break;
+            case "call":
+                exec_call(statementNode); break;
+            case "lookup": // only when not returning anything
+                exec_lookup(statementNode); break;
+            case "return":
+                exec_return(statementNode); break;
+        }
+    }
+
+    public Value exec_get_value(StatementParse node) {
+        switch (node.getName()) {
             case "lookup":
-                return exec_lookup(statementNode);
+                return exec_lookup(node);
         }
-        return "";
+        return null;
     }
 
-    private String exec_sequence(StatementParse node){
-        String result = "";
+    private void exec_sequence(StatementParse node){
         for (int i = 0; i < node.getChildren().size(); i++){
-            result = result.concat(exec(node.getChildren().get(i)));
+            if (node.getChildren().get(i).getName().equals("return")){
+                exec(node.getChildren().get(i));
+                break;
+            }
+            exec(node.getChildren().get(i));
         }
-        return result;
     }
 
-    private String exec_statement(StatementParse node){
-        return exec(node.getChildren().get(0));
+    // TODO handle return value
+    private void exec_return(StatementParse node){
+        StatementParse ret = node.getChildren().get(0);
+        // if it's a function, return the closure
+        if (ret.getName().equals("function")){
+            currentClosure.setRet(new Closure(currentClosure, ret));
+            System.out.println("returned a function");
+        }
+        // if it's a function call, exec the function, get its return value
+        else if (ret.getName().equals("call")){
+            // TODO assumed calling a variable
+            exec(ret);
+            Closure function = (Closure) exec_get_value(ret.getChildren().get(0));
+            currentClosure.setRet(function.getRet());
+            System.out.println("returned a function call");
+        }
+        else {
+            currentClosure.setRet(new IntegerValue(eval(ret)));
+            System.out.println("returned an integer " + eval(ret));
+        }
+    }
+
+    private void exec_statement(StatementParse node){
+        exec(node.getChildren().get(0));
     }
 
     private String exec_expression(StatementParse node){
@@ -79,84 +123,157 @@ public class Interpreter {
     }
 
     private String exec_print(StatementParse node){
-        if (operators.contains(node.getChildren().get(0).getName())){
-            return exec_expression(node.getChildren().get(0)) + "\n";
+        StatementParse value = node.getChildren().get(0);
+        String output = "";
+        if (operators.contains(value.getName())){
+            output = exec_expression(value) + "\n";
+        } else if (value.getName().equals("lookup")){
+            Value variable = exec_get_value(value);
+            output = variable + "\n";
+        } else {
+            exec(value);
         }
-        return exec(node.getChildren().get(0)) + "\n";
+        System.out.println("print: " + output);
+        consoleOutput = consoleOutput.concat(output);
+        return output;
+    }
+
+    // function - (call (lookup name) (arguments x,y))
+    // get return value - immediately after exec_call, access Closure.ret
+    private void exec_call(StatementParse node){
+        System.out.println("Attempt to call function");
+        // TODO not lookup, function directly
+        StatementParse lookup = node.getChildren().get(0);
+        StatementParse arguments = node.getChildren().get(1);
+        Value value = exec_get_value(lookup);
+        if (value instanceof Closure){
+            Closure closure = (Closure) value;
+            // if number of parameter is incorrect
+            if (closure.getParameters().getChildren().size() != arguments.getChildren().size()){
+                throw new ArgumentMismatch();
+            }
+            String result = "";
+            // switch the current closure to the function's closure
+            // exec the function, then switch back to the current closure
+            Closure old = currentClosure;
+            currentClosure = closure;
+            // declare the arguments inside the closure using parameter as variable name
+            for (int i = 0; i < arguments.getChildren().size(); i++){
+                String parameter = currentClosure.getParameters().getChildren().get(i).getName();
+                System.out.println("declaring parameter inside closure: " + parameter);
+                // TODO arguments could be not integers
+                currentClosure.declare(parameter, eval(arguments.getChildren().get(i)));
+            }
+            exec(currentClosure.getSequence());
+            currentClosure.closeClosure();
+            currentClosure = old;
+            System.out.println("called a function");
+        }
+        throw new CallingNonFunction();
     }
 
     // (declare name value)
-    // value is optional
+    // value is optional, either an integer or a function
     private void exec_declare(StatementParse node){
         String variableName = node.getChildren().get(0).getName();
-
+        System.out.println("attempt declare: " + variableName);
         // if value is included
         if (node.getChildren().size() == 2){
-            currentClosure.declare(variableName, eval(node.getChildren().get(1)));
+            StatementParse value = node.getChildren().get(1);
+            if (value.getName().equals("function")){
+                currentClosure.declare(variableName, value, currentClosure);
+                System.out.println("declared a function: " + variableName);
+            } else if (value.getName().equals("call")){
+                exec(value);
+                Closure function = (Closure) exec_get_value(value.getChildren().get(0));
+                if (function.getRet() instanceof Closure){
+                    currentClosure.declare(variableName, ((Closure) function.getRet()).getFunction(), ((Closure) function.getRet()).getParent());
+                } else { // a IntegerValue
+                    currentClosure.declare(variableName, ((IntegerValue) function.getRet()).getValue());
+                }
+                System.out.println("declared using a function call: " + variableName);
+            }
+            else {
+                currentClosure.declare(variableName, eval(value));
+                System.out.println("declared an integer variable: " + variableName);
+            }
         } else {
+            System.out.println("declared a variable without value: "  + variableName);
             currentClosure.declare(variableName);
         }
     }
 
-    private String exec_lookup(StatementParse node){
-        Value value = currentClosure.lookup(node.getChildren().get(0).getName());
-        if (value instanceof IntegerValue){
-            return String.valueOf(((IntegerValue) value).getValue());
-        }
-        return null;
+    // return the Value (Closure or IntegerValue)
+    private Value exec_lookup(StatementParse node){
+        System.out.println("lookup Value: " + node.getChildren().get(0).getName() );
+        return currentClosure.lookup(node.getChildren().get(0).getName());
     }
 
     private void exec_assign(StatementParse node){
+        // get the variable name in (varloc name)
         String name = node.getChildren().get(0).getChildren().get(0).getName();
-        currentClosure.assign(name, eval(node.getChildren().get(1)));
+        StatementParse value = node.getChildren().get(1);
+        System.out.println("attempt assign " + name);
+        if (value.getName().equals("function")){
+            currentClosure.assign(name, value, currentClosure);
+            System.out.println("assigned a function");
+        } if (value.getName().equals("call")){
+            exec(value);
+            // TODO could call a function without declaring a variable
+            Closure function = (Closure) exec_get_value(value.getChildren().get(0));
+            if (function.getRet() instanceof Closure){
+                currentClosure.assign(name, ((Closure) function.getRet()).getFunction(), ((Closure) function.getRet()).getParent());
+            } else { // a IntegerValue
+                currentClosure.assign(name, ((IntegerValue) function.getRet()).getValue());
+            }
+            System.out.println("assigned using a function call");
+        } else {
+            currentClosure.assign(name, eval(value));
+            System.out.println("assigned an integer");
+        }
     }
 
-    private String exec_if(StatementParse node){
+    private void exec_if(StatementParse node){
         String print = "";
         // if the condition is true
         // create a child closure, set it as the currentClosure
         if (isTrue(eval(node.getChildren().get(0)))){
             currentClosure = new Closure(currentClosure);
-            print = exec(node.getChildren().get(1));
+            exec(node.getChildren().get(1));
 
             // change the closure back
             currentClosure = currentClosure.getParent();
         }
-        return print;
     }
 
-    private String exec_ifelse(StatementParse node){
-        String print = "";
+    private void exec_ifelse(StatementParse node){
         // if the condition is true
         // create a child closure, set it as the currentClosure
         if (isTrue(eval(node.getChildren().get(0)))){
             currentClosure = new Closure(currentClosure);
-            print = exec(node.getChildren().get(1));
+            exec(node.getChildren().get(1));
 
             // change the closure back
             currentClosure = currentClosure.getParent();
         } else {
             currentClosure = new Closure(currentClosure);
-            print = exec(node.getChildren().get(2));
+            exec(node.getChildren().get(2));
 
             // change the closure back
             currentClosure = currentClosure.getParent();
         }
-        return print;
     }
 
-    private String exec_while(StatementParse node){
-        String print = "";
+    private void exec_while(StatementParse node){
         // if the condition is true
         // create a child closure, set it as the currentClosure
         while (isTrue(eval(node.getChildren().get(0)))){
             currentClosure = new Closure(currentClosure);
-            print = print.concat(exec(node.getChildren().get(1)));
+            exec(node.getChildren().get(1));
 
             // change the closure back
             currentClosure = currentClosure.getParent();
         }
-        return print;
     }
 
     public Integer eval(StatementParse node){
@@ -233,6 +350,7 @@ public class Interpreter {
         return 0;
     }
 
+    // look up integer only
     private Integer eval_lookup(StatementParse node){
          Value value = currentClosure.lookup(node.getChildren().get(0).getName());
          if (value instanceof IntegerValue){
@@ -321,18 +439,40 @@ class VariableAlreadyDefined extends RuntimeException{
     VariableAlreadyDefined(){
         super();
     }
-
-    VariableAlreadyDefined(String s){
-        super(s);
-    }
 }
 
 class UndefinedVariable extends RuntimeException{
     UndefinedVariable(){
         super();
     }
+}
 
-    UndefinedVariable(String s){
-        super(s);
+class MathOnFunctions extends RuntimeException{
+    MathOnFunctions(){
+        super();
+    }
+}
+
+class ReturnOutsideFunction extends RuntimeException{
+    ReturnOutsideFunction(){
+        super();
+    }
+}
+
+class DuplicateParam extends RuntimeException{
+    DuplicateParam(){
+        super();
+    }
+}
+
+class CallingNonFunction extends RuntimeException{
+    CallingNonFunction(){
+        super();
+    }
+}
+
+class ArgumentMismatch extends RuntimeException{
+    ArgumentMismatch(){
+        super();
     }
 }

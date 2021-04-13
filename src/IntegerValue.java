@@ -13,4 +13,10 @@ public class IntegerValue extends Value {
     public void setValue(Integer value) {
         this.value = value;
     }
+
+
+    @Override
+    public String toString() {
+        return getValue().toString();
+    }
 }
