@@ -41,14 +41,16 @@ public class Interpreter {
         }
         return consoleOutput;
     }
-    public void exec(Parse node){
+
+    // return value for functions only
+    public Value exec(Parse node){
         if (node == null){
             consoleOutput = "syntax error";
         }
         StatementParse statementNode = (StatementParse) node;
         switch (node.getName()) {
             case "sequence":
-                exec_sequence(statementNode); break;
+                return exec_sequence(statementNode);
             case "statement":
                 exec_statement(statementNode); break;
             case "print":
@@ -66,12 +68,13 @@ public class Interpreter {
             case "while":
                 exec_while(statementNode); break;
             case "call":
-                exec_call(statementNode); break;
+                return exec_call(statementNode);
             case "lookup": // only when not returning anything
                 exec_lookup(statementNode); break;
             case "return":
-                exec_return(statementNode); break;
+                return exec_return(statementNode);
         }
+        return null;
     }
 
     public Value exec_get_value(StatementParse node) {
@@ -82,35 +85,37 @@ public class Interpreter {
         return null;
     }
 
-    private void exec_sequence(StatementParse node){
+    // return value for functions only
+    // default 0 - other type of sequence type would use the return value (syntax rules)
+    private Value exec_sequence(StatementParse node){
         for (int i = 0; i < node.getChildren().size(); i++){
             if (node.getChildren().get(i).getName().equals("return")){
-                exec(node.getChildren().get(i));
-                break;
+                return exec(node.getChildren().get(i));
             }
             exec(node.getChildren().get(i));
         }
+        return new IntegerValue(0);
     }
 
     // TODO handle return value
-    private void exec_return(StatementParse node){
+    private Value exec_return(StatementParse node){
         StatementParse ret = node.getChildren().get(0);
         // if it's a function, return the closure
         if (ret.getName().equals("function")){
-            currentClosure.setRet(new Closure(currentClosure, ret));
             System.out.println("returned a function");
+            return new Closure(currentClosure, ret);
         }
         // if it's a function call, exec the function, get its return value
         else if (ret.getName().equals("call")){
             // TODO assumed calling a variable
-            exec(ret);
-            Closure function = (Closure) exec_get_value(ret.getChildren().get(0));
-            currentClosure.setRet(function.getRet());
             System.out.println("returned a function call");
+            return exec(ret);
+            //Closure function = (Closure) exec_get_value(ret.getChildren().get(0));
+            //currentClosure.setRet(function.getRet());
         }
         else {
-            currentClosure.setRet(new IntegerValue(eval(ret)));
             System.out.println("returned an integer " + eval(ret));
+            return new IntegerValue(eval(ret));
         }
     }
 
@@ -140,7 +145,7 @@ public class Interpreter {
 
     // function - (call (lookup name) (arguments x,y))
     // get return value - immediately after exec_call, access Closure.ret
-    private void exec_call(StatementParse node){
+    private Value exec_call(StatementParse node){
         System.out.println("Attempt to call function");
         // TODO not lookup, function directly
         StatementParse lookup = node.getChildren().get(0);
@@ -164,10 +169,11 @@ public class Interpreter {
                 // TODO arguments could be not integers
                 currentClosure.declare(parameter, eval(arguments.getChildren().get(i)));
             }
-            exec(currentClosure.getSequence());
+            Value ret = exec(currentClosure.getSequence());
             currentClosure.closeClosure();
             currentClosure = old;
             System.out.println("called a function");
+            return ret;
         }
         throw new CallingNonFunction();
     }
@@ -184,12 +190,11 @@ public class Interpreter {
                 currentClosure.declare(variableName, value, currentClosure);
                 System.out.println("declared a function: " + variableName);
             } else if (value.getName().equals("call")){
-                exec(value);
-                Closure function = (Closure) exec_get_value(value.getChildren().get(0));
-                if (function.getRet() instanceof Closure){
-                    currentClosure.declare(variableName, ((Closure) function.getRet()).getFunction(), ((Closure) function.getRet()).getParent());
+                Value ret = exec(value);
+                if (ret instanceof Closure){
+                    currentClosure.declare(variableName, ((Closure) ret).getFunction(), ((Closure) ret).getParent());
                 } else { // a IntegerValue
-                    currentClosure.declare(variableName, ((IntegerValue) function.getRet()).getValue());
+                    currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
                 }
                 System.out.println("declared using a function call: " + variableName);
             }
@@ -213,20 +218,18 @@ public class Interpreter {
         // get the variable name in (varloc name)
         String name = node.getChildren().get(0).getChildren().get(0).getName();
         StatementParse value = node.getChildren().get(1);
-        System.out.println("attempt assign " + name);
+        System.out.println("attempt assign: " + name);
         if (value.getName().equals("function")){
             currentClosure.assign(name, value, currentClosure);
-            System.out.println("assigned a function");
-        } if (value.getName().equals("call")){
-            exec(value);
-            // TODO could call a function without declaring a variable
-            Closure function = (Closure) exec_get_value(value.getChildren().get(0));
-            if (function.getRet() instanceof Closure){
-                currentClosure.assign(name, ((Closure) function.getRet()).getFunction(), ((Closure) function.getRet()).getParent());
+            System.out.println("assigned a function: name");
+        } else if (value.getName().equals("call")){
+            Value ret = exec(value);
+            if (ret instanceof Closure){
+                currentClosure.assign(name, ((Closure) ret).getFunction(), ((Closure) ret).getParent());
             } else { // a IntegerValue
-                currentClosure.assign(name, ((IntegerValue) function.getRet()).getValue());
+                currentClosure.assign(name, ((IntegerValue) ret).getValue());
             }
-            System.out.println("assigned using a function call");
+            System.out.println("assigned using a function call: " + name);
         } else {
             currentClosure.assign(name, eval(value));
             System.out.println("assigned an integer");
@@ -234,7 +237,6 @@ public class Interpreter {
     }
 
     private void exec_if(StatementParse node){
-        String print = "";
         // if the condition is true
         // create a child closure, set it as the currentClosure
         if (isTrue(eval(node.getChildren().get(0)))){

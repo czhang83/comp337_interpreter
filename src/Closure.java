@@ -7,8 +7,6 @@ public class Closure extends Value{
     private Closure parent;
     // if this closure is for a function, store the function node
     private StatementParse function;
-    // function return default 0
-    private Value ret = new IntegerValue(0);
 
     public Closure(){
         this.values = new HashMap<>();
@@ -123,14 +121,6 @@ public class Closure extends Value{
 
     public StatementParse getSequence(){
         return this.function.getChildren().get(1);
-    }
-
-    public void setRet(Value value){
-        this.ret = value;
-    }
-
-    public Value getRet(){
-        return this.ret;
     }
 
     // remove all variables when this closure is closed
