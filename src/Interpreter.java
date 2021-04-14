@@ -22,19 +22,23 @@ public class Interpreter {
         try {
             exec(node);
         } catch (ArithmeticException e){
-            consoleOutput = "runtime error: divide by zero";
+            consoleOutput = consoleOutput.concat("runtime error: divide by zero");
         } catch (VariableAlreadyDefined e){
-            consoleOutput = "runtime error: variable already defined";
+            consoleOutput = consoleOutput.concat("runtime error: variable already defined");
         } catch (UndefinedVariable e){
-            consoleOutput = "runtime error: undefined variable";
+            consoleOutput = consoleOutput.concat("runtime error: undefined variable");
         } catch (DuplicateParam e){
-            consoleOutput = "runtime error: duplicate parameter";
+            consoleOutput = consoleOutput.concat("runtime error: duplicate parameter");
         }
 
         catch (CallingNonFunction e){
-            consoleOutput = "runtime error: calling a non-function";
+            consoleOutput = consoleOutput.concat("runtime error: calling a non-function");
         } catch (ArgumentMismatch e){
-            consoleOutput = "runtime error: argument mismatch";
+            consoleOutput = consoleOutput.concat("runtime error: argument mismatch");
+        } catch (MathOnFunctions e){
+            consoleOutput = consoleOutput.concat("runtime error: math operation on functions");
+        } catch (ReturnOutsideFunction e){
+            consoleOutput = consoleOutput.concat("runtime error: returning outside function");
         }
         catch (RuntimeException e){
             e.printStackTrace();
@@ -48,6 +52,9 @@ public class Interpreter {
             consoleOutput = "syntax error";
         }
         StatementParse statementNode = (StatementParse) node;
+        if (operators.contains(statementNode.getName())){
+            evaluate(statementNode);
+        }
         switch (node.getName()) {
             case "sequence":
                 return exec_sequence(statementNode);
@@ -81,6 +88,10 @@ public class Interpreter {
         switch (node.getName()) {
             case "lookup":
                 return exec_lookup(node);
+            case "call":
+                return exec(node);
+            case "function":
+                return new Closure(currentClosure, node);
         }
         return null;
     }
@@ -97,25 +108,26 @@ public class Interpreter {
         return new IntegerValue(0);
     }
 
-    // TODO handle return value
     private Value exec_return(StatementParse node){
+        if (!currentClosure.isFunction()){
+            throw new ReturnOutsideFunction();
+        }
         StatementParse ret = node.getChildren().get(0);
         // if it's a function, return the closure
-        if (ret.getName().equals("function")){
-            System.out.println("returned a function");
-            return new Closure(currentClosure, ret);
-        }
-        // if it's a function call, exec the function, get its return value
-        else if (ret.getName().equals("call")){
-            // TODO assumed calling a variable
-            System.out.println("returned a function call");
-            return exec(ret);
-            //Closure function = (Closure) exec_get_value(ret.getChildren().get(0));
-            //currentClosure.setRet(function.getRet());
-        }
-        else {
-            System.out.println("returned an integer " + eval(ret));
-            return new IntegerValue(eval(ret));
+        switch (ret.getName()) {
+            case "function":
+                System.out.println("returned a function");
+                return new Closure(currentClosure, ret);
+            // if it's a function call, exec the function, get its return value
+            case "call":
+                System.out.println("returned a function call");
+                return exec(ret);
+            case "lookup":
+                System.out.println("returned a variable");
+                return exec_get_value(ret);
+            default:
+                System.out.println("returned an integer " + evaluate(ret));
+                return new IntegerValue(evaluate(ret));
         }
     }
 
@@ -124,54 +136,75 @@ public class Interpreter {
     }
 
     private String exec_expression(StatementParse node){
-        return eval(node).toString();
+        return evaluate(node).toString();
     }
 
-    private String exec_print(StatementParse node){
+    private void exec_print(StatementParse node){
         StatementParse value = node.getChildren().get(0);
-        String output = "";
+        String output;
         if (operators.contains(value.getName())){
             output = exec_expression(value) + "\n";
         } else if (value.getName().equals("lookup")){
             Value variable = exec_get_value(value);
             output = variable + "\n";
         } else {
-            exec(value);
+            output = exec(value) + "\n";
         }
         System.out.println("print: " + output);
         consoleOutput = consoleOutput.concat(output);
-        return output;
     }
 
     // function - (call (lookup name) (arguments x,y))
     // get return value - immediately after exec_call, access Closure.ret
+    // or (call (call (...)))
     private Value exec_call(StatementParse node){
         System.out.println("Attempt to call function");
+        Value value;
         // TODO not lookup, function directly
+        // lookup - could be lookup, call, or function
         StatementParse lookup = node.getChildren().get(0);
         StatementParse arguments = node.getChildren().get(1);
-        Value value = exec_get_value(lookup);
+        // (call (call (...)))
+        if (lookup.getName().equals("call")){
+            value = exec(node.getChildren().get(0));
+        } else if (lookup.getName().equals("function")) {
+            // (call (function (...)))
+            value = new Closure(currentClosure, lookup);
+        } else{
+            value = exec_get_value(lookup);
+        }
         if (value instanceof Closure){
             Closure closure = (Closure) value;
             // if number of parameter is incorrect
             if (closure.getParameters().getChildren().size() != arguments.getChildren().size()){
                 throw new ArgumentMismatch();
             }
-            String result = "";
             // switch the current closure to the function's closure
             // exec the function, then switch back to the current closure
             Closure old = currentClosure;
             currentClosure = closure;
+            System.out.println("entered a closure");
             // declare the arguments inside the closure using parameter as variable name
+            currentClosure.removeVars();
+            // pass in function parameter - copy or actual object
+            // currently a copy of integer, use the same Closure object
             for (int i = 0; i < arguments.getChildren().size(); i++){
                 String parameter = currentClosure.getParameters().getChildren().get(i).getName();
                 System.out.println("declaring parameter inside closure: " + parameter);
-                // TODO arguments could be not integers
-                currentClosure.declare(parameter, eval(arguments.getChildren().get(i)));
+                Value paramValue = exec_get_value(arguments.getChildren().get(i));
+                if (paramValue instanceof Closure){
+                    currentClosure.declare(parameter, (Closure) paramValue);
+                } else if (paramValue instanceof IntegerValue){
+                    currentClosure.declare(parameter, ((IntegerValue) paramValue).getValue());
+                } else { // if returns null - not an Integer or Closure
+                    // treat it as an expression
+                    currentClosure.declare(parameter, evaluate(arguments.getChildren().get(i)));
+                }
+                // TODO input class object
             }
             Value ret = exec(currentClosure.getSequence());
-            currentClosure.closeClosure();
             currentClosure = old;
+            System.out.println("exited a closure");
             System.out.println("called a function");
             return ret;
         }
@@ -199,7 +232,7 @@ public class Interpreter {
                 System.out.println("declared using a function call: " + variableName);
             }
             else {
-                currentClosure.declare(variableName, eval(value));
+                currentClosure.declare(variableName, evaluate(value));
                 System.out.println("declared an integer variable: " + variableName);
             }
         } else {
@@ -231,7 +264,7 @@ public class Interpreter {
             }
             System.out.println("assigned using a function call: " + name);
         } else {
-            currentClosure.assign(name, eval(value));
+            currentClosure.assign(name, evaluate(value));
             System.out.println("assigned an integer");
         }
     }
@@ -239,7 +272,7 @@ public class Interpreter {
     private void exec_if(StatementParse node){
         // if the condition is true
         // create a child closure, set it as the currentClosure
-        if (isTrue(eval(node.getChildren().get(0)))){
+        if (isTrue(evaluate(node.getChildren().get(0)))){
             currentClosure = new Closure(currentClosure);
             exec(node.getChildren().get(1));
 
@@ -251,7 +284,7 @@ public class Interpreter {
     private void exec_ifelse(StatementParse node){
         // if the condition is true
         // create a child closure, set it as the currentClosure
-        if (isTrue(eval(node.getChildren().get(0)))){
+        if (isTrue(evaluate(node.getChildren().get(0)))){
             currentClosure = new Closure(currentClosure);
             exec(node.getChildren().get(1));
 
@@ -269,13 +302,28 @@ public class Interpreter {
     private void exec_while(StatementParse node){
         // if the condition is true
         // create a child closure, set it as the currentClosure
-        while (isTrue(eval(node.getChildren().get(0)))){
+        while (isTrue(evaluate(node.getChildren().get(0)))){
             currentClosure = new Closure(currentClosure);
             exec(node.getChildren().get(1));
 
             // change the closure back
             currentClosure = currentClosure.getParent();
         }
+    }
+
+    // called outside of evals
+    // when expression is only (lookup x), return 1 when x is a function
+    public Integer evaluate(StatementParse node){
+        if (node.getName().equals("lookup")){
+            int value;
+            try {
+                value = eval(node);
+            } catch (MathOnFunctions e){
+                return 1;
+            }
+            return value;
+        }
+        return eval(node);
     }
 
     public Integer eval(StatementParse node){
@@ -316,12 +364,23 @@ public class Interpreter {
     }
 
     private Integer eval_eq(StatementParse node){
-        if (eval(node.getChildren().get(0)).equals(eval(node.getChildren().get(1)))) return 1;
+        Integer first;
+        Integer second;
+        try{
+            first = eval(node.getChildren().get(0));
+            second = eval(node.getChildren().get(1));
+        } catch (MathOnFunctions e){
+            Value func1 = exec_get_value(node.getChildren().get(0));
+            Value func2 = exec_get_value(node.getChildren().get(1));
+            if (func1 == func2) return 1;
+            return 0;
+        }
+        if (first.equals(second)) return 1;
         return 0;
     }
     private Integer eval_not_eq(StatementParse node){
-        if (!eval(node.getChildren().get(0)).equals(eval(node.getChildren().get(1)))) return 1;
-        return 0;
+        if (eval_eq(node) == 1) return 0;
+        return 1;
     }
     private Integer eval_leq(StatementParse node){
         if (eval(node.getChildren().get(0)) <= eval(node.getChildren().get(1))) return 1;
@@ -340,24 +399,28 @@ public class Interpreter {
         return 0;
     }
     private Integer eval_neg(StatementParse node){
-        if (isTrue(eval(node.getChildren().get(0)))) return 0;
+        if (isTrue(node.getChildren().get(0))) return 0;
         return 1;
     }
     private Integer eval_or(StatementParse node){
-        if (isTrue(eval(node.getChildren().get(0))) || isTrue(eval(node.getChildren().get(1)))) return 1;
+        if (isTrue(node.getChildren().get(0)) || isTrue(node.getChildren().get(1))) return 1;
         return 0;
     }
     private Integer eval_and(StatementParse node){
-        if (isTrue(eval(node.getChildren().get(0))) && isTrue(eval(node.getChildren().get(1)))) return 1;
+        if (isTrue(node.getChildren().get(0)) && isTrue(node.getChildren().get(1))) return 1;
         return 0;
     }
 
     // look up integer only
     private Integer eval_lookup(StatementParse node){
+        System.out.println("look up in eval: " + node.getChildren().get(0).getName());
          Value value = currentClosure.lookup(node.getChildren().get(0).getName());
          if (value instanceof IntegerValue){
              return ((IntegerValue) value).getValue();
+         } else if (value instanceof Closure){ // isTrue will catch this error for the boolean operations
+             throw new MathOnFunctions();
          }
+         // TODO operations on classes
          return null;
     }
 
@@ -431,7 +494,23 @@ public class Interpreter {
 
     // 0 - False, other values - True
     private Boolean isTrue(int value){
+
         return value != 0;
+    }
+
+    // isTrue only used in boolean functions (eval_or, eval_and, etc)
+    // eval_lookup will always throw MathOnFunctions when given a function
+    // isTrue catch it and return true for the boolean functions
+    // evaluation will handle the case when the expression only contains (lookup function), not using boolean functions
+    private Boolean isTrue(StatementParse node){
+        System.out.println("isTrue function triggered");
+        int value;
+        try {
+            value = eval(node);
+        } catch (MathOnFunctions e){
+            return true;
+        }
+        return isTrue(value);
     }
 
 
@@ -445,18 +524,6 @@ class VariableAlreadyDefined extends RuntimeException{
 
 class UndefinedVariable extends RuntimeException{
     UndefinedVariable(){
-        super();
-    }
-}
-
-class MathOnFunctions extends RuntimeException{
-    MathOnFunctions(){
-        super();
-    }
-}
-
-class ReturnOutsideFunction extends RuntimeException{
-    ReturnOutsideFunction(){
         super();
     }
 }
@@ -475,6 +542,20 @@ class CallingNonFunction extends RuntimeException{
 
 class ArgumentMismatch extends RuntimeException{
     ArgumentMismatch(){
+        super();
+    }
+}
+
+
+
+class MathOnFunctions extends RuntimeException{
+    MathOnFunctions(){
+        super();
+    }
+}
+
+class ReturnOutsideFunction extends RuntimeException{
+    ReturnOutsideFunction(){
         super();
     }
 }

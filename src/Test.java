@@ -25,16 +25,12 @@ public class Test {
     public static void main(String[] args) {
         //test();
         Parser parser = new Parser();
-        test(parser, "var func1 = func(){\n" +
-                "        var func2 = func(){\n" +
-                "            var func3 = func(){\n" +
-                "            print 4;\n" +
-                "            };\n" +
-                "        ret func3;\n" +
-                "    };\n" +
-                "    ret func2;\n" +
-                "};\n" +
-                "\n" +
-                "func1()()();",0);
+        test(parser, "var x = func() {};\n" +
+                "if (x) {\n" +
+                "  print 12;\n" +
+                "}\n" +
+                "if (!x) {\n" +
+                "  print 10;\n" +
+                "}",0);
     }
 }

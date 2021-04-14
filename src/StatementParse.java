@@ -12,6 +12,11 @@ public class StatementParse extends Parse{
     public List<StatementParse> getChildren(){
         return this.children;
     }
+
+    public void setChildren(List<StatementParse> newChildren){
+        this.children = newChildren;
+    }
+
     public String toString(){
         StringBuilder result = new StringBuilder();
         result.append("(");

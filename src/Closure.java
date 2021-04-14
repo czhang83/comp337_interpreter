@@ -8,19 +8,36 @@ public class Closure extends Value{
     // if this closure is for a function, store the function node
     private StatementParse function;
 
+    private boolean isFunction = false;
+
     public Closure(){
         this.values = new HashMap<>();
     }
 
+    // a control flow Closure
     public Closure(Closure parent){
         this.values = new HashMap<>();
         this.parent = parent;
     }
 
+    // a function
     public Closure(Closure parent, StatementParse function){
         this.values = new HashMap<>();
         this.parent = parent;
         this.function = function;
+        this.isFunction = true;
+
+        // check no duplicate parameters
+        List<StatementParse> parameters = function.getChildren().get(0).getChildren();
+        for (StatementParse x: parameters){
+            int count = 0;
+            for (StatementParse y: parameters){
+                if (x.getName().equals(y.getName())){
+                    count++;
+                }
+            }
+            if (count > 1) throw new DuplicateParam();
+        }
     }
 
     public HashMap<String, Value> getValues() {
@@ -52,24 +69,22 @@ public class Closure extends Value{
         if (contains(name)){
             throw new VariableAlreadyDefined();
         }
-        List<StatementParse> parameters = function.getChildren().get(0).getChildren();
-        for (StatementParse x: parameters){
-            int count = 0;
-            for (StatementParse y: parameters){
-                if (x.getName().equals(y.getName())){
-                    count++;
-                }
-            }
-            if (count > 1) throw new DuplicateParam();
-        }
         Closure newClosure = new Closure(parent, function);
         this.values.put(name, newClosure);
+    }
+
+    // declare a function using a Closure object
+    // used for declaring parameters inside functions
+    public void declare (String name, Closure function){
+        if (contains(name)){
+            throw new VariableAlreadyDefined();
+        }
+        this.values.put(name, function);
     }
 
     // assign a new int
     public void assign (String name, int value){
         Closure exist = find_var(name);
-        Closure newClosure = new Closure(parent, function);
         exist.getValues().put(name, new IntegerValue(value));
     }
 
@@ -77,6 +92,7 @@ public class Closure extends Value{
     public void assign (String name, StatementParse function, Closure parent){
         Closure exist = find_var(name);
         Closure newClosure = new Closure(parent, function);
+        newClosure.isFunction = true;
         exist.getValues().put(name, newClosure);
     }
 
@@ -90,6 +106,7 @@ public class Closure extends Value{
     public Closure find_var(String name){
         Closure currentClosure = this;
         while (currentClosure != null){
+            System.out.println(currentClosure.getValues());
             if (currentClosure.contains(name)){
                 return currentClosure;
             }
@@ -123,8 +140,12 @@ public class Closure extends Value{
         return this.function.getChildren().get(1);
     }
 
-    // remove all variables when this closure is closed
-    public void closeClosure(){
+    // remove all previous defined variable when called again
+    public void removeVars(){
         this.values = new HashMap<>();
+    }
+
+    public boolean isFunction(){
+        return isFunction;
     }
 }
