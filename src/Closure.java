@@ -3,12 +3,17 @@ import java.util.List;
 
 // throw runtime exception
 public class Closure extends Value{
+    // for functions - Closure stored an uncalled version
+    // when called upon, make a copy of the stored Closure object
     private HashMap<String, Value> values;
     private Closure parent;
     // if this closure is for a function, store the function node
     private StatementParse function;
 
     private boolean isFunction = false;
+    // indicate that during a call, this function reached 'return'
+    // used to keep the return value when returning inside a control flow
+    private boolean returning = false;
 
     public Closure(){
         this.values = new HashMap<>();
@@ -92,7 +97,6 @@ public class Closure extends Value{
     public void assign (String name, StatementParse function, Closure parent){
         Closure exist = find_var(name);
         Closure newClosure = new Closure(parent, function);
-        newClosure.isFunction = true;
         exist.getValues().put(name, newClosure);
     }
 
@@ -106,7 +110,9 @@ public class Closure extends Value{
     public Closure find_var(String name){
         Closure currentClosure = this;
         while (currentClosure != null){
-            System.out.println(currentClosure.getValues());
+            //if
+            if (currentClosure.isFunction) System.out.println(currentClosure.getValues());
+            else if (currentClosure.getParent() == null) System.out.println(currentClosure.getValues());
             if (currentClosure.contains(name)){
                 return currentClosure;
             }
@@ -124,9 +130,8 @@ public class Closure extends Value{
     }
 
     @Override
-    public String toString() {
-        return "closure";
-    }
+    //public String toString() { return "closure"; }
+    public String toString() { return "closure"; }
 
     public StatementParse getFunction(){
         return this.function;
@@ -145,7 +150,57 @@ public class Closure extends Value{
         this.values = new HashMap<>();
     }
 
-    public boolean isFunction(){
+    // for exec_return to check whether return is inside a function
+    // decide if current Closure is a function
+    // if it's a control flow Closure, check if it's immediately inside a function
+    public boolean isInFunction(){
+        if (findEnclosingFunction() != null){
+            return true;
+        }
         return isFunction;
+    }
+
+    // for control flow Closure, find the surrounding function
+    // if no surrounding function - error
+    public Closure findEnclosingFunction(){
+        Closure currentClosure = this;
+        while (currentClosure != null){
+            if (currentClosure.isFunction){
+                return currentClosure;
+            }
+            currentClosure = currentClosure.getParent();
+        }
+        return null;
+    }
+
+    // for functions - Closure values stored an uncalled version
+    // when called upon, make a copy of the stored Closure object
+    // only called in exec_call
+    // not for comparison - comparison would always lookup the stored version
+    public Closure copy(){
+        return new Closure(this.getParent(), this.getFunction());
+    }
+
+    public boolean isReturning(){
+        return this.returning;
+    }
+
+    // find the enclosing function and the control flow Closures within and set its returning to true
+    public void returningToTrue(){
+        Closure enclosingFunction = findEnclosingFunction();
+        if (enclosingFunction != null){
+            Closure currentClosure = this;
+            while (currentClosure != enclosingFunction){
+                if (!currentClosure.isReturning()){
+                    currentClosure.returning = true;
+                } else {
+                    System.out.println("---------------------------------------------returning error");
+                }
+                currentClosure = currentClosure.getParent();
+            }
+            enclosingFunction.returning = true;
+            return;
+        }
+        System.out.println("---------------------------------------------returning error");
     }
 }
