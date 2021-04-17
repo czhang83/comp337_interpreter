@@ -27,30 +27,7 @@ public class Test {
         //test();
         Parser parser = new Parser();
 
-        test(parser, "var is_prime = func(n) {\n" +
-                "    var i = 2;\n" +
-                "    while (i * i <= n) {\n" +
-                "        var factor = n / i;\n" +
-                "        if (i * factor == n) {\n" +
-                "            ret 0;\n" +
-                "        }\n" +
-                "        i = i + 1;\n" +
-                "    }\n" +
-                "    ret 1;\n" +
-                "};\n" +
-                "\n" +
-                "var get_nth_prime = func(n) {\n" +
-                "    var i = 1;\n" +
-                "    var count = 0;\n" +
-                "    while (count < n) {\n" +
-                "        i = i + 1;\n" +
-                "        if (is_prime(i) == 1) {\n" +
-                "            count = count + 1;\n" +
-                "        }\n" +
-                "    }\n" +
-                "    ret i;\n" +
-                "};\n" +
-                "\n" +
-                "print get_nth_prime(5);",0);
+        test(parser,
+                "foo.bar = 6;",0);
     }
 }

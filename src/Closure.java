@@ -15,6 +15,8 @@ public class Closure extends Value{
     // used to keep the return value when returning inside a control flow
     private boolean returning = false;
 
+    private Closure belongObject = null;
+
     public Closure(){
         this.values = new HashMap<>();
     }
@@ -202,5 +204,17 @@ public class Closure extends Value{
             return;
         }
         System.out.println("---------------------------------------------returning error");
+    }
+
+    public Closure getBelongObject() {
+        return belongObject;
+    }
+
+    public void setBelongObject(Closure belongObject) {
+        this.belongObject = belongObject;
+    }
+
+    public boolean isMember(){
+        return this.belongObject != null;
     }
 }

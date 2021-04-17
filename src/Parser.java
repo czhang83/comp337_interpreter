@@ -58,16 +58,26 @@ public class Parser {
         }
 
         switch (term) {
+            case "type":
+                return this.parse_type(str, index);
             case "class":
                 return this.parse_class(str, index);
-            case "call_expression":
-                return this.parse_call_expression(str, index);
+            case "call_member_expression":
+                return this.parse_call_member_expression(str, index);
+            case "call_member":
+                return this.parse_call_member(str, index);
+            case "member":
+                return this.parse_member(str, index);
             case "function_call":
                 return this.parse_function_call(str, index);
             case "arguments":
                 return this.parse_arguments(str, index);
             case "parameters":
                 return this.parse_parameters(str, index);
+            case "parameter":
+                return this.parse_parameter(str, index);
+            case "return_type":
+                return this.parse_return_type(str, index);
             case "function":
                 return this.parse_function(str, index);
             case "or_expression":
@@ -116,6 +126,8 @@ public class Parser {
                 return this.parse_comment(str, index);
             case ",":
                 return this.parse_comma(str, index);
+            case ".":
+                return this.parse_dot(str, index);
             default:
                 throw new AssertionError("Unexpected term " + term);
         }
@@ -226,22 +238,43 @@ public class Parser {
         return expression;
     }
 
-    //"var" req_space assignment_statement;
-    // (assign var_name (+ expression))
+    // type req_space identifier opt_space "=" opt_space expression opt_space ";"
+    // (declare var_name (expression)) for var
+    // (declare type var_name (expression)) except var
     private StatementParse parse_declaration_statement(String str, int index){
-        if (!str.startsWith("var", index)){
-            return STATEMENT_FAIL;
-        }
-        index = index + 3;
+        StatementParse type = (StatementParse) this.parse(str, index, "type");
+        if (type.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
+        index = type.getIndex();
         Parse space = this.parse(str, index, "req_space");
         if (space.equals(STATEMENT_FAIL)){
             return STATEMENT_FAIL;
         }
-        StatementParse assign = (StatementParse) this.parse(str, space.getIndex(), "assignment_statement");
-        if (assign.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
-        StatementParse declare = new StatementParse("declare", assign.getIndex());
-        declare.getChildren().add(assign.getChildren().get(0).getChildren().get(0));
-        declare.getChildren().add(assign.getChildren().get(1));
+
+        StatementParse identifier = (StatementParse) this.parse(str, space.getIndex(), "identifier");
+        if (identifier.equals(Parser.STATEMENT_FAIL)){
+            return Parser.STATEMENT_FAIL;
+        }
+        index = identifier.getIndex();
+        Parse spaces = this.parse(str, index, "opt_space");
+        if (!charAt(str, spaces.getIndex(), '=')){
+            return Parser.STATEMENT_FAIL;
+        }
+        spaces = this.parse(str, spaces.getIndex() + 1, "opt_space");
+        StatementParse expression = (StatementParse) this.parse(str, spaces.getIndex(), "expression");
+        if (expression.equals(STATEMENT_FAIL)){
+            return STATEMENT_FAIL;
+        }
+        spaces = this.parse(str, expression.getIndex(), "opt_space");
+        if (!charAt(str, spaces.getIndex(), ';')){
+            return STATEMENT_FAIL;
+        }
+        StatementParse declare = new StatementParse("declare", spaces.getIndex() + 1);
+        declare.getChildren().add(identifier.getChildren().get(0));
+        declare.getChildren().add(expression);
+
+        if (!type.getName().equals("var")){
+            declare.getChildren().add(0, type);
+        }
         return declare;
     }
     // location opt_space "=" opt_space expression opt_space ";";
@@ -514,14 +547,22 @@ public class Parser {
         return STATEMENT_FAIL;
     }
 
-    // operand ( opt_space function_call )*
+    // "func" or "int" or "var
+    // use IdentifierParse so that the name has no parenthesis
+    private StatementParse parse_type(String str, int index){
+        if (str.startsWith("func", index)) return new IdentifierParse("func", index + 4);
+        if (str.startsWith("int", index)) return new IdentifierParse("int", index + 3);
+        if (str.startsWith("var", index)) return new IdentifierParse("var", index + 3);
+        return STATEMENT_FAIL;
+    }
+    // operand ( opt_space call_member )*
     // (call (lookup func) (arguments))
-    private Parse parse_call_expression(String str, int index){
+    private Parse parse_call_member_expression(String str, int index){
         StatementParse operand = (StatementParse) this.parse(str, index, "operand");
         if (operand.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
 
         List<Parse> parses = zero_or_more(str, operand.getIndex(), new ArrayList<>(
-                Arrays.asList("opt_space", "function_call")
+                Arrays.asList("opt_space", "call_member")
         ));
         for (int i = 0; i < parses.size(); i++){
             if (i % 2 == 1) {
@@ -531,6 +572,35 @@ public class Parser {
             }
         }
         return operand;
+    }
+
+    // function_call or member
+    private Parse parse_call_member(String str, int index){
+        StatementParse function_call = (StatementParse) this.parse(str, index,"function_call");
+        if(!function_call.equals(Parser.STATEMENT_FAIL)){
+            return function_call;
+        }
+
+        StatementParse member = (StatementParse) this.parse(str, index,"member");
+        if(!member.equals(Parser.STATEMENT_FAIL)){
+            return member;
+        }
+
+        return STATEMENT_FAIL;
+    }
+
+    //"." opt_space identifier
+    // (member name)
+    // add the insert node later in call_member_expression (member (lookup var) name) - var.name
+    private Parse parse_member(String str, int index){
+        if (this.parse(str, index, ".").equals(FAIL)) return STATEMENT_FAIL;
+        Parse spaces = this.parse(str, index + 1, "opt_space");
+        index = spaces.getIndex();
+        StatementParse identifier = (StatementParse) this.parse(str, index,"identifier");
+        if (identifier.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
+        StatementParse member = new StatementParse("member", identifier.getIndex());
+        member.getChildren().add(identifier.getChildren().get(0));
+        return member;
     }
 
     // "(" opt_space arguments opt_space ")"
@@ -575,7 +645,7 @@ public class Parser {
         return arguments;
     }
 
-    // "func" opt_space "(" opt_space parameters opt_space ")" opt_space "{" opt_space program opt_space "}"
+    // "func" opt_space "(" opt_space parameters opt_space ")" ( opt_space return_type )? opt_space "{" opt_space program opt_space "}"
     private Parse parse_function(String str, int index){
         if (!str.startsWith("func", index)) return STATEMENT_FAIL;
         Parse spaces = this.parse(str, index + 4, "opt_space");
@@ -589,9 +659,14 @@ public class Parser {
         spaces = this.parse(str, parameters.getIndex(), "opt_space");
         index = spaces.getIndex();
         if (!charAt(str, index, ')')) return STATEMENT_FAIL;
+
         spaces = this.parse(str, index + 1, "opt_space");
         index = spaces.getIndex();
+        StatementParse signature = (StatementParse) this.parse(str, index, "return_type");
+        if (!signature.equals(STATEMENT_FAIL)) index = signature.getIndex();
 
+        spaces = this.parse(str, index, "opt_space");
+        index = spaces.getIndex();
         if (!charAt(str, index, '{')) return STATEMENT_FAIL;
         spaces = this.parse(str, index + 1, "opt_space");
         index = spaces.getIndex();
@@ -602,38 +677,99 @@ public class Parser {
         if (!charAt(str, index, '}')) return STATEMENT_FAIL;
         index = index + 1;
 
+
+        // if at least one is typed, type all variable
+        boolean typed = !signature.equals(STATEMENT_FAIL);
+        for (StatementParse parameter : parameters.getChildren()){
+            if (parameter.getChildren().size() != 0) {
+                typed = true;
+                break;
+            }
+        }
+
+        if (signature.equals(STATEMENT_FAIL)){ // if no return type, default to "var"
+            signature = new StatementParse("signature", index);
+            signature.getChildren().add(new IdentifierParse("var", index));
+        }
+
         StatementParse function = new StatementParse("function", index);
+        if (typed){
+            for (int i = 0; i < parameters.getChildren().size(); i++){
+                StatementParse parameter = parameters.getChildren().get(i);
+                if (parameter.getChildren().size() != 1){
+                    signature.getChildren().add(i, new IdentifierParse("var", index));
+                } else {
+                    signature.getChildren().add(i, parameter.getChildren().get(0));
+                    parameter.getChildren().remove(0);
+                }
+            }
+            function.getChildren().add(signature);
+        }
         function.getChildren().add(parameters);
         function.getChildren().add(program);
         return function;
     }
 
-    // 0 or 1 ( identifier opt_space ( "," opt_space identifier opt_space )* )
-    // (parameter var) - identifier does not have lookup
+    // ( parameter opt_space ( "," opt_space parameter opt_space )* )?
+    // (parameter (var type)) - identifier does not have lookup
     private Parse parse_parameters(String str, int index){
-        StatementParse parameter = new StatementParse("parameters", index);
-        StatementParse identifier = (StatementParse) this.parse(str, index, "identifier");
-        if (identifier.equals(STATEMENT_FAIL)) return parameter;
-        parameter.getChildren().add(identifier.getChildren().get(0));
-        parameter.setIndex(identifier.getIndex());
+        StatementParse parameters = new StatementParse("parameters", index);
+        StatementParse parameter = (StatementParse) this.parse(str, index, "parameter");
+        if (parameter.equals(STATEMENT_FAIL)) return parameters;
+        parameters.getChildren().add(parameter);
+        parameters.setIndex(parameter.getIndex());
 
-        Parse spaces = this.parse(str, identifier.getIndex(), "opt_space");
+        Parse spaces = this.parse(str, parameter.getIndex(), "opt_space");
         index = spaces.getIndex();
 
         List<Parse> parses = zero_or_more(str, index, new ArrayList<>(
-                Arrays.asList(",", "opt_space", "identifier", "opt_space")
+                Arrays.asList(",", "opt_space", "parameter", "opt_space")
         ));
         for (int i = 0; i < parses.size(); i++){
             // zero_to_more always return 4*x parses
             if (i % 4 == 2) { // get the operation of the current iteration
-                identifier = (StatementParse) parses.get(i);
-                parameter.getChildren().add(identifier.getChildren().get(0));
+                parameter = (StatementParse) parses.get(i);
+                parameters.getChildren().add(parameter);
             }
         }
-        parameter.setIndex(identifier.getIndex());
-        return parameter;
+        parameters.setIndex(parameter.getIndex());
+        return parameters;
     }
 
+    //( type req_space )? identifier
+    private Parse parse_parameter(String str, int index){
+        List<Parse> parses = zero_or_more(str, index, new ArrayList<>(
+                Arrays.asList("type", "req_space")
+        ));
+        // has no type - return var_name
+        if (parses.size() == 0){
+            StatementParse lookup = (StatementParse) this.parse(str, index, "identifier");
+            if (lookup.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
+            return lookup.getChildren().get(0);
+        }
+        // has type - return Identifier Parse var_name with a child type (var_name type)
+        if (parses.size() == 2){
+            StatementParse lookup = (StatementParse) this.parse(str, parses.get(1).getIndex(), "identifier");
+            if (lookup.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
+            StatementParse variable = lookup.getChildren().get(0);
+            variable.getChildren().add((StatementParse) parses.get(0));
+            return variable;
+        }
+        return STATEMENT_FAIL;
+    }
+
+    //"->" opt_space type
+    // return (signature return_type) for the parse_function
+    private Parse parse_return_type(String str, int index){
+        if (!str.startsWith("->", index)) return STATEMENT_FAIL;
+        Parse spaces = this.parse(str, index + 2, "opt_space");
+        index = spaces.getIndex();
+        StatementParse type = (StatementParse) this.parse(str, index, "type");
+        if (type.equals(STATEMENT_FAIL)) return STATEMENT_FAIL;
+        StatementParse signature = new StatementParse("signature", type.getIndex());
+        signature.getChildren().add(type);
+        return signature;
+    }
     /**
      * identifier               = identifier_first_char ( identifier_char )*;
      * identifier_first_char    = ALPHA
@@ -662,16 +798,31 @@ public class Parser {
         return lookup;
     }
 
-    // identifier
-    // return location node, identifier as its child
+    // identifier ( "." identifier )*
+    // get (lookup name) from identifier
+    // put name under (varloc name)
+    // or (memloc (varloc var) name) for var.name
     private StatementParse parse_location(String str, int index){
         StatementParse lookup = (StatementParse) this.parse(str, index, "identifier");
         if (lookup.equals(Parser.STATEMENT_FAIL)){
             return Parser.STATEMENT_FAIL;
         }
-        StatementParse location = new StatementParse("varloc", lookup.getIndex());
-        location.getChildren().add(lookup.getChildren().get(0));
-        return location;
+        StatementParse varloc = new StatementParse("varloc", lookup.getIndex());
+        varloc.getChildren().add(lookup.getChildren().get(0));
+
+        List<Parse> parses = zero_or_more(str, varloc.getIndex(), new ArrayList<>(
+                Arrays.asList(".", "identifier")
+        ));
+        for (int i = 0; i < parses.size(); i++){
+            if (i % 2 == 1) {
+                StatementParse member_name = (StatementParse) parses.get(i);
+                StatementParse memloc = new StatementParse("memloc", member_name.getIndex());
+                memloc.getChildren().add(varloc);
+                memloc.getChildren().add(member_name.getChildren().get(0));
+                varloc = memloc;
+            }
+        }
+        return varloc;
     }
 
     private StatementParse parse_expression(String str, int index){
@@ -784,17 +935,17 @@ public class Parser {
         return result;
     }
 
-    //call_expression, 0 or more ( opt_space mul_div_operator opt_space call_expression)
+    //call_member_expression, 0 or more ( opt_space mul_div_operator opt_space call_member_expression)
     private StatementParse parse_mul_div_expression(String str, int index){
         //always start with an integer
-        StatementParse left_node = (StatementParse) this.parse(str, index, "call_expression");
+        StatementParse left_node = (StatementParse) this.parse(str, index, "call_member_expression");
         if (left_node.equals(Parser.STATEMENT_FAIL)){
             return Parser.STATEMENT_FAIL;
         }
         index = left_node.getIndex();
         StatementParse result = left_node;
         List<Parse> parses = zero_or_more(str, index, new ArrayList<>(
-                Arrays.asList("opt_space", "mul_div_operator", "opt_space", "call_expression")
+                Arrays.asList("opt_space", "mul_div_operator", "opt_space", "call_member_expression")
         ));
 
         for (int i = 0; i < parses.size(); i++){
@@ -956,6 +1107,15 @@ public class Parser {
         return FAIL;
     }
 
+    // helper parse
+    // match to "."
+    private Parse parse_dot(String str, int index){
+        if (charAt(str, index, '.')){
+            return new Parse("dot", index + 1);
+        }
+        return FAIL;
+    }
+
     // check if index out of bound, return false, to avoid exception
     private Boolean charAt(String str, int index, char x){
         return index < str.length() && str.charAt(index) == x; // short circuit
@@ -966,3 +1126,4 @@ public class Parser {
 
 
 }
+
