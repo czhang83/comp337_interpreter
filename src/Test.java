@@ -28,6 +28,6 @@ public class Test {
         Parser parser = new Parser();
 
         test(parser,
-                "foo.bar = 6;",0);
+                "var b; print b;",0);
     }
 }

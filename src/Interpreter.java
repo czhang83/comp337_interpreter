@@ -233,20 +233,20 @@ public class Interpreter {
     }
 
     // (declare name value)
-    // value is optional, either an integer or a function
+    // a declare statement must have value
     private void exec_declare(StatementParse node){
         String variableName = node.getChildren().get(0).getName();
         System.out.println("attempt declare: " + variableName);
         // if value is included
         if (node.getChildren().size() == 2){
             StatementParse value = node.getChildren().get(1);
-            if (value.getName().equals("function")){
+            if (value.getName().equals("function") || value.getName().equals("class")){
                 currentClosure.declare(variableName, value, currentClosure);
-                System.out.println("declared a function: " + variableName);
+                System.out.println("declared a function or class: " + variableName);
             } else if (value.getName().equals("call")){
                 Value ret = exec(value);
-                if (ret instanceof Closure){
-                    currentClosure.declare(variableName, ((Closure) ret).getFunction(), ((Closure) ret).getParent());
+                if (ret instanceof Closure){ // return a function or a class
+                    currentClosure.declare(variableName, ((Closure) ret).getNode(), ((Closure) ret).getParent());
                 } else { // a IntegerValue
                     currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
                 }
@@ -256,9 +256,6 @@ public class Interpreter {
                 currentClosure.declare(variableName, evaluate(value));
                 System.out.println("declared an integer variable: " + variableName);
             }
-        } else {
-            System.out.println("declared a variable without value: "  + variableName);
-            currentClosure.declare(variableName);
         }
     }
 
@@ -279,7 +276,7 @@ public class Interpreter {
         } else if (value.getName().equals("call")){
             Value ret = exec(value);
             if (ret instanceof Closure){
-                currentClosure.assign(name, ((Closure) ret).getFunction(), ((Closure) ret).getParent());
+                currentClosure.assign(name, ((Closure) ret).getNode(), ((Closure) ret).getParent());
             } else { // a IntegerValue
                 currentClosure.assign(name, ((IntegerValue) ret).getValue());
             }

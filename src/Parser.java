@@ -23,7 +23,7 @@ public class Parser {
             System.out.println("--------------------------------------------------------------");
             return null;
         }
-        return this.parse(str, 0, "program");
+        return result;
     }
     // wrapper
     public Parse parse(String str, String term){
