@@ -34,8 +34,12 @@ public class Closure extends Value{
         this.node = node;
         this.isFunction = true;
 
+        paramDuplicate();
+    }
+
+    protected void paramDuplicate(){
         // check no duplicate parameters
-        List<StatementParse> parameters = node.getChildren().get(0).getChildren();
+        List<StatementParse> parameters = this.node.getChildren().get(0).getChildren();
         for (StatementParse x: parameters){
             int count = 0;
             for (StatementParse y: parameters){
@@ -81,11 +85,11 @@ public class Closure extends Value{
 
     // declare a function using a Closure object
     // used for declaring parameters inside functions
-    public void declare (String name, Closure function){
+    public void declare (String name, Value value){
         if (contains(name)){
             throw new VariableAlreadyDefined();
         }
-        this.values.put(name, function);
+        this.values.put(name, value);
     }
 
     // assign a new int
@@ -105,6 +109,14 @@ public class Closure extends Value{
         }
         exist.getValues().put(name, newClosure);
     }
+
+    // assign using a Closure object
+    // used for declaring parameters inside functions
+    public void assign (String name, Value value){
+        Closure exist = find_var(name);
+        exist.getValues().put(name, value);
+    }
+
 
     // if variable not exist, check the parents, until reached the end
     public Value lookup (String name){
@@ -181,8 +193,12 @@ public class Closure extends Value{
     // when called upon, make a copy of the stored Closure object
     // only called in exec_call
     // not for comparison - comparison would always lookup the stored version
-    public Closure copy(){
-        return new Closure(this.getParent(), this.getNode());
+    public Closure copy_function(){
+        Closure newClosure = new Closure(this.getParent(), this.getNode());
+        newClosure.isFunction = this.isFunction;
+        newClosure.returning = this.returning;
+        newClosure.belongObject = this.belongObject;
+        return newClosure;
     }
 
     public boolean isReturning(){

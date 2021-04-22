@@ -40,6 +40,12 @@ public class Interpreter {
         } catch (ReturnOutsideFunction e){
             consoleOutput = consoleOutput.concat("runtime error: returning outside function");
         }
+
+        catch (NonObjectMember e){
+            consoleOutput = consoleOutput.concat("runtime error: member of non-object");
+        } catch (UndefinedMember e){
+            consoleOutput = consoleOutput.concat("runtime error: undefined member");
+        }
         catch (RuntimeException e){
             e.printStackTrace();
         }
@@ -78,6 +84,8 @@ public class Interpreter {
                 return exec_call(statementNode);
             case "lookup": // only when not returning anything
                 exec_lookup(statementNode); break;
+            case "member":
+                return exec_member(statementNode);
             case "return":
                 return exec_return(statementNode);
         }
@@ -88,6 +96,8 @@ public class Interpreter {
         switch (node.getName()) {
             case "lookup":
                 return exec_lookup(node);
+            case "member":
+                return exec_member(node);
             case "call":
                 return exec(node);
             case "function":
@@ -132,6 +142,9 @@ public class Interpreter {
             case "function":
                 System.out.println("returned a function");
                 return new Closure(currentClosure, ret);
+            case "class":
+                System.out.println("returned a class");
+                return new Environment(currentClosure, ret);
             // if it's a function call, exec the function, get its return value
             case "call":
                 System.out.println("returned a function call");
@@ -158,7 +171,7 @@ public class Interpreter {
         String output;
         if (operators.contains(value.getName())){
             output = exec_expression(value) + "\n";
-        } else if (value.getName().equals("lookup")){
+        } else if (value.getName().equals("lookup") || value.getName().equals("member")){
             Value variable = exec_get_value(value);
             output = variable + "\n";
         } else {
@@ -172,28 +185,58 @@ public class Interpreter {
     }
 
     // function - (call (lookup name) (arguments x,y))
-    // get return value - immediately after exec_call, access Closure.ret
+    // class - (call (lookup className) (arguments))) - return an class object
     // or (call (call (...)))
     private Value exec_call(StatementParse node){
         System.out.println("Attempt to call function");
         Value value;
-        // TODO not lookup, function directly
         // lookup - could be lookup, call, or function
         StatementParse lookup = node.getChildren().get(0);
         StatementParse arguments = node.getChildren().get(1);
         // (call (call (...)))
         if (lookup.getName().equals("call")){
             value = exec(node.getChildren().get(0));
-        } else if (lookup.getName().equals("function")) {
+        } else if (lookup.getName().equals("function")) { //TODO Simplify to exec_get_value?
             // (call (function (...)))
             value = new Closure(currentClosure, lookup);
-        } else{
+        } else if (lookup.getName().equals("class")) {
+            // (call (class (...)))
+            value = new Environment(currentClosure, lookup);
+        } else if (lookup.getName().equals("member")){
+            // (call (member (...)))
+            value = exec_get_value(lookup);
+        } else {
             value = exec_get_value(lookup);
         }
-        if (value instanceof Closure){
-            Closure closure = ((Closure) value).copy();
+
+        // if value is a class
+        if (value instanceof Environment){
+            System.out.println("initialize an object");
+            if (arguments.getChildren().size() != 0) throw new ArgumentMismatch();
+            EnvironmentObject obj = ((Environment) value).create_object();
+            Closure old = currentClosure;
+            currentClosure = obj;
+            System.out.println("declaring variables inside an object");
+            // class children - declare statements
+            // use exec_sequence to exec all declares
+            exec_sequence(((Environment) value).getNode());
+            currentClosure = old;
+            System.out.println("created an object");
+            return obj;
+        }
+        // a function - (call (lookup name) (arguments x,y))
+        else if (value instanceof Closure){
+            Closure closure = ((Closure) value).copy_function();
+            int argumentIndex = 0;
+            if (closure.isMember()){
+                // if it's a member function, add 'this' to the argument
+                // parameter should be (this,...)
+                if (closure.getParameters().getChildren().size() < 1) throw new ArgumentMismatch();
+                argumentIndex = 1;
+                closure.declare(closure.getParameters().getChildren().get(0).getName(), closure.getBelongObject());
+            }
             // if number of parameter is incorrect
-            if (closure.getParameters().getChildren().size() != arguments.getChildren().size()){
+            if (closure.getParameters().getChildren().size() != arguments.getChildren().size() + argumentIndex){
                 throw new ArgumentMismatch();
             }
             // switch the current closure to the function's closure
@@ -204,7 +247,7 @@ public class Interpreter {
             // pass in function parameter - copy or actual object
             // currently a copy of integer, use the same Closure object
             for (int i = 0; i < arguments.getChildren().size(); i++){
-                String parameter = closure.getParameters().getChildren().get(i).getName();
+                String parameter = closure.getParameters().getChildren().get(i + argumentIndex).getName();
                 System.out.println("declaring parameter inside closure: " + parameter);
                 Value paramValue = exec_get_value(arguments.getChildren().get(i));
                 if (paramValue instanceof Closure){
@@ -215,7 +258,6 @@ public class Interpreter {
                     // treat it as an expression
                     closure.declare(parameter, evaluate(arguments.getChildren().get(i)));
                 }
-                // TODO input class object
             }
             // search arguments in the closure that called the function (currentClosure)
             // after declaring the parameters in the function closure
@@ -243,14 +285,25 @@ public class Interpreter {
             if (value.getName().equals("function") || value.getName().equals("class")){
                 currentClosure.declare(variableName, value, currentClosure);
                 System.out.println("declared a function or class: " + variableName);
-            } else if (value.getName().equals("call")){
+            } else if (value.getName().equals("call") || value.getName().equals("member")){
                 Value ret = exec(value);
-                if (ret instanceof Closure){ // return a function or a class
-                    currentClosure.declare(variableName, ((Closure) ret).getNode(), ((Closure) ret).getParent());
+                if (ret instanceof EnvironmentObject){ // return a obj
+                    currentClosure.declare(variableName, (Closure) ret);
+                } else if (ret instanceof Closure){ // return a function or class
+                    currentClosure.declare(variableName, (Closure) ret);
                 } else { // a IntegerValue
                     currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
                 }
                 System.out.println("declared using a function call: " + variableName);
+            }
+            else if (value.getName().equals("lookup")){
+                Value ret = exec_get_value(value);
+                if (!(ret instanceof IntegerValue)){
+                    currentClosure.declare(variableName, ret);
+                    System.out.println("declared an variable: " + variableName);
+                } else {
+                    currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
+                }
             }
             else {
                 currentClosure.declare(variableName, evaluate(value));
@@ -259,24 +312,50 @@ public class Interpreter {
         }
     }
 
-    // return the Value (Closure or IntegerValue)
+    // return the Value
     private Value exec_lookup(StatementParse node){
         System.out.println("lookup Value: " + node.getChildren().get(0).getName() );
         return currentClosure.lookup(node.getChildren().get(0).getName());
     }
 
+    private Value exec_member(StatementParse node){
+        Value obj = exec_get_value(node.getChildren().get(0));
+        if (!(obj instanceof EnvironmentObject)) throw new NonObjectMember();
+
+        String member_name = node.getChildren().get(1).getName();
+        return obj.lookup_member(member_name);
+    }
+
+    // (assign (memloc (varloc name) value)))
+    // (assign (varloc name) value)
     private void exec_assign(StatementParse node){
-        // get the variable name in (varloc name)
-        String name = node.getChildren().get(0).getChildren().get(0).getName();
+        Closure old = currentClosure;
+        StatementParse locationNode = node.getChildren().get(0);
+        String name;
+        if (locationNode.getName().equals("memloc")){
+            String objName = locationNode.getChildren().get(0).getChildren().get(0).getName();
+            name = locationNode.getChildren().get(1).getName();
+            System.out.println("attempt assign an member variable: " + name);
+            Value obj = currentClosure.lookup(objName);
+            if (!(obj instanceof EnvironmentObject)) throw new NonObjectMember();
+            currentClosure = (EnvironmentObject) obj;
+            // check that it won't trigger 'undefined member'
+            currentClosure.lookup_member(name);
+        } else {
+            // get the variable name in (varloc name)
+            name = node.getChildren().get(0).getChildren().get(0).getName();
+            System.out.println("attempt assign: " + name);
+        }
         StatementParse value = node.getChildren().get(1);
-        System.out.println("attempt assign: " + name);
-        if (value.getName().equals("function")){
+        if (value.getName().equals("function")|| value.getName().equals("class")){
             currentClosure.assign(name, value, currentClosure);
             System.out.println("assigned a function: name");
         } else if (value.getName().equals("call")){
             Value ret = exec(value);
-            if (ret instanceof Closure){
-                currentClosure.assign(name, ((Closure) ret).getNode(), ((Closure) ret).getParent());
+            if (ret instanceof EnvironmentObject){ // return a obj
+                currentClosure.assign(name, (Closure) ret);
+            } else if (ret instanceof Closure){ // return a function or class
+                currentClosure.assign(name, (Closure) ret);
             } else { // a IntegerValue
                 currentClosure.assign(name, ((IntegerValue) ret).getValue());
             }
@@ -286,6 +365,7 @@ public class Interpreter {
             currentClosure.assign(name, number);
             System.out.println("assigned an integer " + number);
         }
+        currentClosure = old;
     }
 
     private Value exec_if(StatementParse node){
@@ -349,7 +429,8 @@ public class Interpreter {
     // called outside of evals
     // when expression is only (lookup x), return 1 when x is a function
     public Integer evaluate(StatementParse node){
-        if (node.getName().equals("lookup")){
+        if (node.getName().equals("lookup") || node.getName().equals("call")
+        || node.getName().equals("member")){
             int value;
             try {
                 value = eval(node);
@@ -392,6 +473,7 @@ public class Interpreter {
             case "&&":
                 return eval_and(node);
             case "lookup":
+            case "member":
                 return eval_lookup(node);
             case "call": // for function calls in expressions
                 Value result = exec(node);
@@ -453,13 +535,12 @@ public class Interpreter {
     // look up integer only
     private Integer eval_lookup(StatementParse node){
         System.out.println("look up in eval: " + node.getChildren().get(0).getName());
-         Value value = currentClosure.lookup(node.getChildren().get(0).getName());
+         Value value = exec_get_value(node); // TODO
          if (value instanceof IntegerValue){
              return ((IntegerValue) value).getValue();
          } else if (value instanceof Closure){ // isTrue will catch this error for the boolean operations
              throw new MathOnFunctions();
          }
-         // TODO operations on classes
          return null;
     }
 
@@ -595,6 +676,19 @@ class MathOnFunctions extends RuntimeException{
 
 class ReturnOutsideFunction extends RuntimeException{
     ReturnOutsideFunction(){
+        super();
+    }
+}
+
+
+class NonObjectMember extends RuntimeException{
+    NonObjectMember(){
+        super();
+    }
+}
+
+class UndefinedMember extends RuntimeException{
+    UndefinedMember(){
         super();
     }
 }
