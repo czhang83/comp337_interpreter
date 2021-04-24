@@ -102,8 +102,26 @@ public class Interpreter {
                 return exec(node);
             case "function":
                 return new Closure(currentClosure, node);
+            default: // an int:
+                return new IntegerValue(evaluate(node));
         }
-        return null;
+    }
+
+    // given (memloc (varloc objName) name)) or (memloc (memloc (...)))
+    // get the member variable
+    // used in assign to provide the inner memloc obj
+    public Value exec_get_loc(StatementParse node){
+        StatementParse varloc = node.getChildren().get(0);
+        String name = node.getChildren().get(1).getName();
+        if (varloc.getName().equals("varloc")){
+            String objName = varloc.getChildren().get(0).getName();
+            Closure target_obj = (Closure) currentClosure.lookup(objName);
+            if (!(target_obj instanceof EnvironmentObject)) throw new NonObjectMember();
+            return target_obj.lookup_member(name);
+        }
+
+        Closure target_obj = (Closure) exec_get_loc(varloc);
+        return target_obj.lookup_member(name);
     }
 
     // return value for functions only
@@ -123,10 +141,6 @@ public class Interpreter {
         }
 
         if (ret == null && currentClosure.isInFunction()){
-            /**System.out.println("----------------------------------------returing 0");
-             for (int i = 0; i < node.getChildren().size(); i++){
-             System.out.println(node.getChildren().get(i));
-             }*/
             return new IntegerValue(0);
         }
         return ret;
@@ -276,6 +290,7 @@ public class Interpreter {
 
     // (declare name value)
     // a declare statement must have value
+    // can not declare new member variable
     private void exec_declare(StatementParse node){
         String variableName = node.getChildren().get(0).getName();
         System.out.println("attempt declare: " + variableName);
@@ -330,15 +345,20 @@ public class Interpreter {
     // (assign (varloc name) value)
     private void exec_assign(StatementParse node){
         Closure old = currentClosure;
+        Closure target_obj = currentClosure; // use if assigning memloc
         StatementParse locationNode = node.getChildren().get(0);
         String name;
-        if (locationNode.getName().equals("memloc")){
-            String objName = locationNode.getChildren().get(0).getChildren().get(0).getName();
+        if (locationNode.getName().equals("memloc")){ // could be nested memloc
+            if (locationNode.getChildren().get(0).getName().equals("memloc")){
+                target_obj = (Closure) exec_get_loc(locationNode.getChildren().get(0));
+            } else {
+                String objName = locationNode.getChildren().get(0).getChildren().get(0).getName();
+                target_obj = (Closure) currentClosure.lookup(objName);
+            }
             name = locationNode.getChildren().get(1).getName();
             System.out.println("attempt assign an member variable: " + name);
-            Value obj = currentClosure.lookup(objName);
-            if (!(obj instanceof EnvironmentObject)) throw new NonObjectMember();
-            currentClosure = (EnvironmentObject) obj;
+            if (!(target_obj instanceof EnvironmentObject)) throw new NonObjectMember();
+            currentClosure = target_obj;
             // check that it won't trigger 'undefined member'
             currentClosure.lookup_member(name);
         } else {
@@ -350,8 +370,12 @@ public class Interpreter {
         if (value.getName().equals("function")|| value.getName().equals("class")){
             currentClosure.assign(name, value, currentClosure);
             System.out.println("assigned a function: name");
-        } else if (value.getName().equals("call")){
+        } else if (value.getName().equals("call")|| value.getName().equals("member")){
+            // if value require exec in the current closure
+            // change closure back
+            currentClosure = old;
             Value ret = exec(value);
+            currentClosure = target_obj;
             if (ret instanceof EnvironmentObject){ // return a obj
                 currentClosure.assign(name, (Closure) ret);
             } else if (ret instanceof Closure){ // return a function or class
@@ -361,7 +385,9 @@ public class Interpreter {
             }
             System.out.println("assigned using a function call: " + name);
         } else {
+            currentClosure = old;
             Integer number = evaluate(value);
+            currentClosure = target_obj;
             currentClosure.assign(name, number);
             System.out.println("assigned an integer " + number);
         }
@@ -535,7 +561,7 @@ public class Interpreter {
     // look up integer only
     private Integer eval_lookup(StatementParse node){
         System.out.println("look up in eval: " + node.getChildren().get(0).getName());
-         Value value = exec_get_value(node); // TODO
+         Value value = exec_get_value(node);
          if (value instanceof IntegerValue){
              return ((IntegerValue) value).getValue();
          } else if (value instanceof Closure){ // isTrue will catch this error for the boolean operations
