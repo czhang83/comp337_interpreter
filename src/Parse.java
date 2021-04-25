@@ -6,6 +6,8 @@ public class Parse {
     private String name;
     private int index;
 
+    public Parse(String name){this.name = name;}
+
     public Parse(String name, int index) {
         this.name = name;
         this.index = index;

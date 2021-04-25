@@ -208,19 +208,25 @@ public class Interpreter {
         StatementParse lookup = node.getChildren().get(0);
         StatementParse arguments = node.getChildren().get(1);
         // (call (call (...)))
-        if (lookup.getName().equals("call")){
-            value = exec(node.getChildren().get(0));
-        } else if (lookup.getName().equals("function")) { //TODO Simplify to exec_get_value?
-            // (call (function (...)))
-            value = new Closure(currentClosure, lookup);
-        } else if (lookup.getName().equals("class")) {
-            // (call (class (...)))
-            value = new Environment(currentClosure, lookup);
-        } else if (lookup.getName().equals("member")){
-            // (call (member (...)))
-            value = exec_get_value(lookup);
-        } else {
-            value = exec_get_value(lookup);
+        switch (lookup.getName()) {
+            case "call":
+                value = exec(node.getChildren().get(0));
+                break;
+            case "function":  //TODO Simplify to exec_get_value?
+                // (call (function (...)))
+                value = new Closure(currentClosure, lookup);
+                break;
+            case "class":
+                // (call (class (...)))
+                value = new Environment(currentClosure, lookup);
+                break;
+            case "member":
+                // (call (member (...)))
+                value = exec_get_value(lookup);
+                break;
+            default:
+                value = exec_get_value(lookup);
+                break;
         }
 
         // if value is a class
@@ -265,7 +271,7 @@ public class Interpreter {
                 System.out.println("declaring parameter inside closure: " + parameter);
                 Value paramValue = exec_get_value(arguments.getChildren().get(i));
                 if (paramValue instanceof Closure){
-                    closure.declare(parameter, (Closure) paramValue);
+                    closure.declare(parameter, paramValue);
                 } else if (paramValue instanceof IntegerValue){
                     closure.declare(parameter, ((IntegerValue) paramValue).getValue());
                 } else { // if returns null - not an Integer or Closure
@@ -303,9 +309,9 @@ public class Interpreter {
             } else if (value.getName().equals("call") || value.getName().equals("member")){
                 Value ret = exec(value);
                 if (ret instanceof EnvironmentObject){ // return a obj
-                    currentClosure.declare(variableName, (Closure) ret);
+                    currentClosure.declare(variableName, ret);
                 } else if (ret instanceof Closure){ // return a function or class
-                    currentClosure.declare(variableName, (Closure) ret);
+                    currentClosure.declare(variableName, ret);
                 } else { // a IntegerValue
                     currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
                 }
@@ -377,9 +383,9 @@ public class Interpreter {
             Value ret = exec(value);
             currentClosure = target_obj;
             if (ret instanceof EnvironmentObject){ // return a obj
-                currentClosure.assign(name, (Closure) ret);
+                currentClosure.assign(name, ret);
             } else if (ret instanceof Closure){ // return a function or class
-                currentClosure.assign(name, (Closure) ret);
+                currentClosure.assign(name, ret);
             } else { // a IntegerValue
                 currentClosure.assign(name, ((IntegerValue) ret).getValue());
             }
@@ -456,7 +462,8 @@ public class Interpreter {
     // when expression is only (lookup x), return 1 when x is a function
     public Integer evaluate(StatementParse node){
         if (node.getName().equals("lookup") || node.getName().equals("call")
-        || node.getName().equals("member")){
+                || node.getName().equals("member") || node.getName().equals("function")
+                || node.getName().equals("class")){
             int value;
             try {
                 value = eval(node);
@@ -501,6 +508,9 @@ public class Interpreter {
             case "lookup":
             case "member":
                 return eval_lookup(node);
+            case "function":
+            case "class":
+                throw new MathOnFunctions();
             case "call": // for function calls in expressions
                 Value result = exec(node);
                 if (result instanceof Closure) throw new MathOnFunctions();
