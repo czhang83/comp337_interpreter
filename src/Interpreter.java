@@ -229,8 +229,10 @@ public class Interpreter {
                 break;
         }
 
-        // if value is a class
-        if (value instanceof Environment){
+        // can not call an object
+        if (value instanceof EnvironmentObject){
+            throw new CallingNonFunction();
+        }else if(value instanceof Environment){ // if calling a class
             System.out.println("initialize an object");
             if (arguments.getChildren().size() != 0) throw new ArgumentMismatch();
             EnvironmentObject obj = ((Environment) value).create_object();
@@ -303,32 +305,39 @@ public class Interpreter {
         // if value is included
         if (node.getChildren().size() == 2){
             StatementParse value = node.getChildren().get(1);
-            if (value.getName().equals("function") || value.getName().equals("class")){
-                currentClosure.declare(variableName, value, currentClosure);
-                System.out.println("declared a function or class: " + variableName);
-            } else if (value.getName().equals("call") || value.getName().equals("member")){
-                Value ret = exec(value);
-                if (ret instanceof EnvironmentObject){ // return a obj
-                    currentClosure.declare(variableName, ret);
-                } else if (ret instanceof Closure){ // return a function or class
-                    currentClosure.declare(variableName, ret);
-                } else { // a IntegerValue
-                    currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
+            switch (value.getName()) {
+                case "function":
+                case "class":
+                    currentClosure.declare(variableName, value, currentClosure);
+                    System.out.println("declared a function or class: " + variableName);
+                    break;
+                case "call":
+                case "member": {
+                    Value ret = exec(value);
+                    if (ret instanceof EnvironmentObject) { // return a obj
+                        currentClosure.declare(variableName, ret);
+                    } else if (ret instanceof Closure) { // return a function or class
+                        currentClosure.declare(variableName, ret);
+                    } else { // a IntegerValue
+                        currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
+                    }
+                    System.out.println("declared using a function call: " + variableName);
+                    break;
                 }
-                System.out.println("declared using a function call: " + variableName);
-            }
-            else if (value.getName().equals("lookup")){
-                Value ret = exec_get_value(value);
-                if (!(ret instanceof IntegerValue)){
-                    currentClosure.declare(variableName, ret);
-                    System.out.println("declared an variable: " + variableName);
-                } else {
-                    currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
+                case "lookup": {
+                    Value ret = exec_get_value(value);
+                    if (!(ret instanceof IntegerValue)) {
+                        currentClosure.declare(variableName, ret);
+                        System.out.println("declared an variable: " + variableName);
+                    } else {
+                        currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
+                    }
+                    break;
                 }
-            }
-            else {
-                currentClosure.declare(variableName, evaluate(value));
-                System.out.println("declared an integer variable: " + variableName);
+                default:
+                    currentClosure.declare(variableName, evaluate(value));
+                    System.out.println("declared an integer variable: " + variableName);
+                    break;
             }
         }
     }
@@ -390,12 +399,21 @@ public class Interpreter {
                 currentClosure.assign(name, ((IntegerValue) ret).getValue());
             }
             System.out.println("assigned using a function call: " + name);
-        } else {
+        } else { // lookup
             currentClosure = old;
-            Integer number = evaluate(value);
+            Value ret = exec_get_value(value);
             currentClosure = target_obj;
-            currentClosure.assign(name, number);
-            System.out.println("assigned an integer " + number);
+            if (!(ret instanceof IntegerValue)){
+                currentClosure.assign(name, ret);
+                System.out.println("declared an variable: " + name);
+            } else {
+                currentClosure.assign(name, ((IntegerValue) ret).getValue());
+                System.out.println("assigned an integer " + ((IntegerValue) ret).getValue());
+            }
+            //currentClosure = old;
+            //Integer number = evaluate(value);
+            //currentClosure = target_obj;
+            //currentClosure.assign(name, number);
         }
         currentClosure = old;
     }
