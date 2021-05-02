@@ -12,12 +12,11 @@ public class Interpreter {
 
     String consoleOutput = "";
 
-    // not include syntax error - deal during parsing
+    // syntax error - Parser return null
     public String execute (Parse node){
         mainClosure = new Closure();
         currentClosure = mainClosure;
 
-        System.out.println("s expression "+ node);
         consoleOutput = "";
         try {
             exec(node);
@@ -154,20 +153,15 @@ public class Interpreter {
         // if it's a function, return the closure
         switch (ret.getName()) {
             case "function":
-                System.out.println("returned a function");
                 return new Closure(currentClosure, ret);
             case "class":
-                System.out.println("returned a class");
                 return new Environment(currentClosure, ret);
             // if it's a function call, exec the function, get its return value
             case "call":
-                System.out.println("returned a function call");
                 return exec(ret);
             case "lookup":
-                System.out.println("returned a variable");
                 return exec_get_value(ret);
             default:
-                System.out.println("returned an integer " + evaluate(ret));
                 return new IntegerValue(evaluate(ret));
         }
     }
@@ -191,10 +185,8 @@ public class Interpreter {
         } else {
             //output = exec(value) + "\n";
             Value result = exec(value);
-            System.out.println("Inside print " + result.getClass());
             output = result + "\n";
         }
-        System.out.println("print: " + output);
         consoleOutput = consoleOutput.concat(output);
     }
 
@@ -202,7 +194,6 @@ public class Interpreter {
     // class - (call (lookup className) (arguments))) - return an class object
     // or (call (call (...)))
     private Value exec_call(StatementParse node){
-        System.out.println("Attempt to call function");
         Value value;
         // lookup - could be lookup, call, or function
         StatementParse lookup = node.getChildren().get(0);
@@ -233,17 +224,14 @@ public class Interpreter {
         if (value instanceof EnvironmentObject){
             throw new CallingNonFunction();
         }else if(value instanceof Environment){ // if calling a class
-            System.out.println("initialize an object");
             if (arguments.getChildren().size() != 0) throw new ArgumentMismatch();
             EnvironmentObject obj = ((Environment) value).create_object();
             Closure old = currentClosure;
             currentClosure = obj;
-            System.out.println("declaring variables inside an object");
             // class children - declare statements
             // use exec_sequence to exec all declares
             exec_sequence(((Environment) value).getNode());
             currentClosure = old;
-            System.out.println("created an object");
             return obj;
         }
         // a function - (call (lookup name) (arguments x,y))
@@ -270,7 +258,6 @@ public class Interpreter {
             // currently a copy of integer, use the same Closure object
             for (int i = 0; i < arguments.getChildren().size(); i++){
                 String parameter = closure.getParameters().getChildren().get(i + argumentIndex).getName();
-                System.out.println("declaring parameter inside closure: " + parameter);
                 Value paramValue = exec_get_value(arguments.getChildren().get(i));
                 if (paramValue instanceof Closure){
                     closure.declare(parameter, paramValue);
@@ -286,11 +273,8 @@ public class Interpreter {
             // change the currentClosure to the function closure to exec
             Closure old = currentClosure;
             currentClosure = closure;
-            System.out.println("entered a closure " + currentClosure.isInFunction());
             Value ret = exec(currentClosure.getSequence());
             currentClosure = old;
-            System.out.println("exited a closure");
-            System.out.println("called a function");
             return ret;
         }
         throw new CallingNonFunction();
@@ -301,7 +285,6 @@ public class Interpreter {
     // can not declare new member variable
     private void exec_declare(StatementParse node){
         String variableName = node.getChildren().get(0).getName();
-        System.out.println("attempt declare: " + variableName);
         // if value is included
         if (node.getChildren().size() == 2){
             StatementParse value = node.getChildren().get(1);
@@ -309,7 +292,6 @@ public class Interpreter {
                 case "function":
                 case "class":
                     currentClosure.declare(variableName, value, currentClosure);
-                    System.out.println("declared a function or class: " + variableName);
                     break;
                 case "call":
                 case "member": {
@@ -321,14 +303,12 @@ public class Interpreter {
                     } else { // a IntegerValue
                         currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
                     }
-                    System.out.println("declared using a function call: " + variableName);
                     break;
                 }
                 case "lookup": {
                     Value ret = exec_get_value(value);
                     if (!(ret instanceof IntegerValue)) {
                         currentClosure.declare(variableName, ret);
-                        System.out.println("declared an variable: " + variableName);
                     } else {
                         currentClosure.declare(variableName, ((IntegerValue) ret).getValue());
                     }
@@ -336,7 +316,6 @@ public class Interpreter {
                 }
                 default:
                     currentClosure.declare(variableName, evaluate(value));
-                    System.out.println("declared an integer variable: " + variableName);
                     break;
             }
         }
@@ -344,7 +323,6 @@ public class Interpreter {
 
     // return the Value
     private Value exec_lookup(StatementParse node){
-        System.out.println("lookup Value: " + node.getChildren().get(0).getName() );
         return currentClosure.lookup(node.getChildren().get(0).getName());
     }
 
@@ -371,7 +349,6 @@ public class Interpreter {
                 target_obj = (Closure) currentClosure.lookup(objName);
             }
             name = locationNode.getChildren().get(1).getName();
-            System.out.println("attempt assign an member variable: " + name);
             if (!(target_obj instanceof EnvironmentObject)) throw new NonObjectMember();
             currentClosure = target_obj;
             // check that it won't trigger 'undefined member'
@@ -379,12 +356,10 @@ public class Interpreter {
         } else {
             // get the variable name in (varloc name)
             name = node.getChildren().get(0).getChildren().get(0).getName();
-            System.out.println("attempt assign: " + name);
         }
         StatementParse value = node.getChildren().get(1);
         if (value.getName().equals("function")|| value.getName().equals("class")){
             currentClosure.assign(name, value, currentClosure);
-            System.out.println("assigned a function: name");
         } else if (value.getName().equals("call")|| value.getName().equals("member")){
             // if value require exec in the current closure
             // change closure back
@@ -398,34 +373,25 @@ public class Interpreter {
             } else { // a IntegerValue
                 currentClosure.assign(name, ((IntegerValue) ret).getValue());
             }
-            System.out.println("assigned using a function call: " + name);
         } else { // lookup
             currentClosure = old;
             Value ret = exec_get_value(value);
             currentClosure = target_obj;
             if (!(ret instanceof IntegerValue)){
                 currentClosure.assign(name, ret);
-                System.out.println("declared an variable: " + name);
             } else {
                 currentClosure.assign(name, ((IntegerValue) ret).getValue());
-                System.out.println("assigned an integer " + ((IntegerValue) ret).getValue());
             }
-            //currentClosure = old;
-            //Integer number = evaluate(value);
-            //currentClosure = target_obj;
-            //currentClosure.assign(name, number);
         }
         currentClosure = old;
     }
 
     private Value exec_if(StatementParse node){
-        System.out.println("enter an if");
         // a function could return inside control flow
         Value ret = null;
         // if the condition is true
         // create a child closure, set it as the currentClosure
         if (isTrue(evaluate(node.getChildren().get(0)))){
-            System.out.println("if condition true");
             currentClosure = new Closure(currentClosure);
             ret = exec(node.getChildren().get(1));
 
@@ -436,19 +402,16 @@ public class Interpreter {
     }
 
     private Value exec_ifelse(StatementParse node){
-        System.out.println("enter an ifelse");
         Value ret;
         // if the condition is true
         // create a child closure, set it as the currentClosure
         if (isTrue(evaluate(node.getChildren().get(0)))){
-            System.out.println("if condition true");
             currentClosure = new Closure(currentClosure);
             ret = exec(node.getChildren().get(1));
 
             // change the closure back
             currentClosure = currentClosure.getParent();
         } else {
-            System.out.println("else condition true");
             currentClosure = new Closure(currentClosure);
             ret = exec(node.getChildren().get(2));
 
@@ -459,14 +422,12 @@ public class Interpreter {
     }
 
     private Value exec_while(StatementParse node){
-        System.out.println("enter an while");
         Value ret = null;
         // if the condition is true
         // create a child closure, set it as the currentClosure
         while (isTrue(evaluate(node.getChildren().get(0)))){
             // while should terminate if return from inside
             if (currentClosure.isReturning()) return ret;
-            System.out.println("while condition true");
             currentClosure = new Closure(currentClosure);
             ret = exec(node.getChildren().get(1));
 
@@ -588,7 +549,6 @@ public class Interpreter {
 
     // look up integer only
     private Integer eval_lookup(StatementParse node){
-        System.out.println("look up in eval: " + node.getChildren().get(0).getName());
          Value value = exec_get_value(node);
          if (value instanceof IntegerValue){
              return ((IntegerValue) value).getValue();
@@ -677,7 +637,6 @@ public class Interpreter {
     // isTrue catch it and return true for the boolean functions
     // evaluation will handle the case when the expression only contains (lookup function), not using boolean functions
     private Boolean isTrue(StatementParse node){
-        System.out.println("isTrue function triggered");
         int value;
         try {
             value = eval(node);

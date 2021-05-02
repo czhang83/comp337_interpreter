@@ -21,7 +21,6 @@ public class ConstantFoldingTransform {
     public StatementParse visit(Parse node) {
         StatementParse statementNode = (StatementParse) node;
         if (node instanceof IntegerParse) {
-            //System.out.println(node);
             return statementNode;
         }
 
@@ -87,8 +86,6 @@ public class ConstantFoldingTransform {
     public ArrayList<StatementParse> expandNode(StatementParse node){
         ArrayList<StatementParse> expanded = new ArrayList<>();
         recursiveExpand(node, expanded);
-        System.out.println("Expanded: ");
-        print_array(expanded);
         return expanded;
 
     }
@@ -96,7 +93,6 @@ public class ConstantFoldingTransform {
     public void recursiveExpand(StatementParse node, ArrayList<StatementParse> expanded){
         // make the second node negative in a - node.
         if (node.getName().equals("-")){
-            System.out.println("triggered on " + node);
             node.getChildren().get(1).changeNegativity();
         }
         for (StatementParse child: node.getChildren()){
@@ -120,8 +116,6 @@ public class ConstantFoldingTransform {
     // move all non-constant node to the front
     // keep the original order
     public ArrayList<StatementParse> nonConstantFirst (ArrayList<StatementParse> expression){
-        System.out.println("Rearranging: ");
-        print_array(expression);
         ArrayList<StatementParse> reordered = new ArrayList<>();
         for (int i = expression.size()-1; i >= 0; i--){
             if (!(expression.get(i) instanceof IntegerParse)){
@@ -138,8 +132,6 @@ public class ConstantFoldingTransform {
     // given a expression with all non-constant in the front
     // collapse the constant values
     public ArrayList<StatementParse> collapseExpression(ArrayList<StatementParse> expression){
-        System.out.println("Collapsing: ");
-        print_array(expression);
         int index = 0;
         for (int i = 0; i < expression.size(); i++){
             if (expression.get(i) instanceof IntegerParse) {
@@ -158,13 +150,11 @@ public class ConstantFoldingTransform {
             if (child.isNegative()){
                 result = result - ((IntegerParse) child).getValue();
             } else {
-                // System.out.println(child);
                 result = result + ((IntegerParse) child).getValue();
             }
         }
         ArrayList<StatementParse> converted = new ArrayList<>(expression.subList(0, index));
         // collapse 0
-        print_array(converted);
         if (result == 0) return converted;
         // if result is negative, flip the sign
         IntegerParse integer;

@@ -128,8 +128,6 @@ public class Closure extends Value{
     public Closure find_var(String name){
         Closure currentClosure = this;
         while (currentClosure != null){
-            if (currentClosure.isFunction) System.out.println(currentClosure.getValues());
-            else if (currentClosure.getParent() == null) System.out.println(currentClosure.getValues());
             if (currentClosure.contains(name)){
                 return currentClosure;
             }
@@ -213,15 +211,11 @@ public class Closure extends Value{
             while (currentClosure != enclosingFunction){
                 if (!currentClosure.isReturning()){
                     currentClosure.returning = true;
-                } else {
-                    System.out.println("---------------------------------------------returning error");
                 }
                 currentClosure = currentClosure.getParent();
             }
             enclosingFunction.returning = true;
-            return;
         }
-        System.out.println("---------------------------------------------returning error");
     }
 
     public EnvironmentObject getBelongObject() {

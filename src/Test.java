@@ -1,7 +1,7 @@
 
-public class Test {
+public class Test { // test individual code
 
-    private static void test(Parser parser, String str, int expected) {
+    private static void test(Parser parser, String str) {
         Interpreter interpreter = new Interpreter();
         ConstantFoldingTransform transform = new ConstantFoldingTransform();
         System.out.println(str);
@@ -24,6 +24,6 @@ public class Test {
         Parser parser = new Parser();
 
         test(parser,
-                "5 - 2 * func(n){6/3+n;} + 1;",0);
+                "5 - 2 * func(n){6/3+n;} + 1;");
     }
 }
